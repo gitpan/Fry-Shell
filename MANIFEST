@@ -3,4 +3,5 @@ t/shell.t
 lib/Fry/Shell.pm
 MANIFEST
 samples/handyshell.pl
+README
 META.yml                                 Module meta-data (added by MakeMaker)

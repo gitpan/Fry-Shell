@@ -49,7 +49,7 @@ handyshell.pl  - A handy shell which number aliases filenames
 
 =head1 DESCRIPTION 
 
-This script demonstrates the parse_menu mode of GH::Shell.
+This script demonstrates the parse_menu mode of Fry::Shell.
 The parse_menu mode associates a number with the previous command's output and converts
 the given numbers
 
@@ -61,15 +61,17 @@ the given numbers
 		you didn't specify any of the predefined commands, the shell defaulted to
 		executing &loop_default. This script redefines &loop_default by passing any
 		commmand as a system call. Hence, typing 'ls' executes as in any regular shell.
-	3. Type 'h' or 'help' to see a list of available commands.	
-	4. Type '-m e ls'. You should see a numbered output of 'ls' with one file per row. This numbered list is a menu 
+	3. Type '\lc' or 'list_commands' to see a list of available commands and their aliases.	
+	4. Perhaps you're unsure of how to use &print_global_data. You can type 'h print_global_data' or 'help_usage
+	print_global_data' to get a usage regular expression on that command.
+	5. Type '-m e ls'. You should see a numbered output of 'ls' with one file per row. This numbered list is a menu 
 		of files. You can now execute a command on these files by number.
 
 			The '-m' is a flag telling the shell to associate the output of this command with numbers for
 			the next command cycle. The 'e' is an alias for 'execute'. &execute does two main
 			things: it correctly numbers the output and saves the output to the
 			&lines accessor.
-	5. Now, the cool part. Type 'ls' followed by a list of numbers to act on
+	6. Now, the cool part. Type 'ls' followed by a list of numbers to act on
 		(ie ls 1-3,6). Use a comma to delimit the list and a '-' to specify a range of
 		numbers.  You should have listed only the specified files.
 	

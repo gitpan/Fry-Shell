@@ -1,0 +1,34 @@
+INSTALL
+	perl Makefile.PL; make; make test; make install;
+	Do 'make install' as root if installing into root-protected directories
+Description
+	This a framework for building shells and commands around user-defined functions and
+	libraries.
+Features
+	-subclassable: all functions are defined as class methods making this module easily subclassable
+	-libraries: load libraries of functions automatically, libraries can come with default global data
+	-data: user-configurable variables defined as global data and are highly configurable
+	at several levels( global config file,library defaults,library config file,script and
+	commandline)
+	-options: can be called from commandline or shell to pass values to global data and any functions
+	-basic metadata functions: set and print global data,listing of functions  
+	-integrated help: supports defining description and usage help for user-defined functions, 
+	-alias shell functions
+	-parsing modes: can change how current line is parsed on the fly by flipping the parsing option, comes
+	with a handy parse_menu parse mode
+	- should work with any database working under Class::DBI; verified to work with
+	  Mysql,Postgres and Sqlite.
+ToDo
+	- global config file: allow it to be a perl data structure and
+	support setting global data
+	- Redesign to allow plugin architecture for loading data, readline, storing
+	data, printing data. By making any external modules plugins, one can
+	have a minimal shell and install external modules as desired.
+	- support libraries which have object methods, currently only class methods supported  
+	- autocompletion support
+	- make design more OO
+	- better library plugin support
+License
+	Perl's
+	
+Have fun!
