@@ -12,6 +12,7 @@ use base 'Fry::Base';
 
 	sub saveArray ($@) {shift->setVar(lines=>[@_]) }
 	sub varMany ($@) { return shift->var->getMany('value',@_) }  
+	sub requireLibraries ($@) { shift->lib->requireLibraries(@_) }
 
 1;
 __END__	
@@ -47,6 +48,7 @@ Instead, you should use &call
 	listAll($core_class): Returns list of object ids and their aliases for core class. Wrapper around a core class's &listAliasAndIds.
 	saveArray(@value): Sets the lines variable to the given array. Used with the menu option.
 	varMany(@var): Gets several variable values.
+	requireLibraries(@libs): Loads libraries if they're not loaded.
 
 	Note: Valid core classes are the core class accessors in Fry::Base.
 

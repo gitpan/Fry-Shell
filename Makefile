@@ -50,11 +50,11 @@ AR_STATIC_ARGS = cr
 DIRFILESEP = /
 NAME = Fry::Shell
 NAME_SYM = Fry_Shell
-VERSION = 0.14
+VERSION = 0.15
 VERSION_MACRO = VERSION
-VERSION_SYM = 0_14
+VERSION_SYM = 0_15
 DEFINE_VERSION = -D$(VERSION_MACRO)=\"$(VERSION)\"
-XS_VERSION = 0.14
+XS_VERSION = 0.15
 XS_VERSION_MACRO = XS_VERSION
 XS_DEFINE_VERSION = -D$(XS_VERSION_MACRO)=\"$(XS_VERSION)\"
 INST_ARCHLIB = blib/arch
@@ -151,6 +151,7 @@ MAN3PODS = lib/Fry/Base.pm \
 	lib/Fry/Cmd.pm \
 	lib/Fry/Config/Default.pm \
 	lib/Fry/Config/YAML.pm \
+	lib/Fry/Developer.pod \
 	lib/Fry/Dump/DataDumper.pm \
 	lib/Fry/Dump/Default.pm \
 	lib/Fry/Dump/TreeDumper.pm \
@@ -193,6 +194,7 @@ TO_INST_PM = lib/Fry/Base.pm \
 	lib/Fry/Cmd.pm \
 	lib/Fry/Config/Default.pm \
 	lib/Fry/Config/YAML.pm \
+	lib/Fry/Developer.pod \
 	lib/Fry/Dump/DataDumper.pm \
 	lib/Fry/Dump/Default.pm \
 	lib/Fry/Dump/TreeDumper.pm \
@@ -213,52 +215,54 @@ TO_INST_PM = lib/Fry/Base.pm \
 	lib/Fry/Var.pm \
 	lib/Fry/View/CLI.pm
 
-PM_TO_BLIB = lib/Fry/Config/YAML.pm \
-	blib/lib/Fry/Config/YAML.pm \
-	lib/Fry/View/CLI.pm \
-	blib/lib/Fry/View/CLI.pm \
-	lib/Fry/Obj.pm \
-	blib/lib/Fry/Obj.pm \
-	lib/Fry/Opt.pm \
-	blib/lib/Fry/Opt.pm \
-	lib/Fry/ReadLine/Gnu.pm \
-	blib/lib/Fry/ReadLine/Gnu.pm \
-	lib/Fry/ReadLine/Default.pm \
-	blib/lib/Fry/ReadLine/Default.pm \
-	lib/Fry/Base.pm \
-	blib/lib/Fry/Base.pm \
+PM_TO_BLIB = lib/Fry/Lib/Default.pm \
+	blib/lib/Fry/Lib/Default.pm \
+	lib/Fry/Type.pm \
+	blib/lib/Fry/Type.pm \
 	lib/Fry/Shell.pm \
 	blib/lib/Fry/Shell.pm \
-	lib/Fry/Sub.pm \
-	blib/lib/Fry/Sub.pm \
-	lib/Fry/Dump/TreeDumper.pm \
-	blib/lib/Fry/Dump/TreeDumper.pm \
-	lib/Fry/Lib/DBI.pm \
-	blib/lib/Fry/Lib/DBI.pm \
+	lib/Fry/ReadLine/Gnu.pm \
+	blib/lib/Fry/ReadLine/Gnu.pm \
+	lib/Fry/Developer.pod \
+	blib/lib/Fry/Developer.pod \
+	lib/Fry/Cmd.pm \
+	blib/lib/Fry/Cmd.pm \
 	lib/Fry/Lib/Inspector.pm \
 	blib/lib/Fry/Lib/Inspector.pm \
 	lib/Fry/Lib.pm \
 	blib/lib/Fry/Lib.pm \
-	lib/Fry/Cmd.pm \
-	blib/lib/Fry/Cmd.pm \
-	lib/Fry/Error.pm \
-	blib/lib/Fry/Error.pm \
-	lib/Fry/Dump/DataDumper.pm \
-	blib/lib/Fry/Dump/DataDumper.pm \
-	lib/Fry/List.pm \
-	blib/lib/Fry/List.pm \
-	lib/Fry/ShellI.pm \
-	blib/lib/Fry/ShellI.pm \
-	lib/Fry/Lib/Default.pm \
-	blib/lib/Fry/Lib/Default.pm \
-	lib/Fry/Config/Default.pm \
-	blib/lib/Fry/Config/Default.pm \
-	lib/Fry/Type.pm \
-	blib/lib/Fry/Type.pm \
+	lib/Fry/Base.pm \
+	blib/lib/Fry/Base.pm \
+	lib/Fry/Lib/DBI.pm \
+	blib/lib/Fry/Lib/DBI.pm \
+	lib/Fry/ReadLine/Default.pm \
+	blib/lib/Fry/ReadLine/Default.pm \
 	lib/Fry/Dump/Default.pm \
 	blib/lib/Fry/Dump/Default.pm \
+	lib/Fry/Error.pm \
+	blib/lib/Fry/Error.pm \
+	lib/Fry/Dump/TreeDumper.pm \
+	blib/lib/Fry/Dump/TreeDumper.pm \
+	lib/Fry/Obj.pm \
+	blib/lib/Fry/Obj.pm \
 	lib/Fry/Var.pm \
-	blib/lib/Fry/Var.pm
+	blib/lib/Fry/Var.pm \
+	lib/Fry/Config/Default.pm \
+	blib/lib/Fry/Config/Default.pm \
+	lib/Fry/ShellI.pm \
+	blib/lib/Fry/ShellI.pm \
+	lib/Fry/List.pm \
+	blib/lib/Fry/List.pm \
+	lib/Fry/Opt.pm \
+	blib/lib/Fry/Opt.pm \
+	lib/Fry/Config/YAML.pm \
+	blib/lib/Fry/Config/YAML.pm \
+	lib/Fry/Sub.pm \
+	blib/lib/Fry/Sub.pm \
+	lib/Fry/View/CLI.pm \
+	blib/lib/Fry/View/CLI.pm \
+	lib/Fry/Dump/DataDumper.pm \
+	blib/lib/Fry/Dump/DataDumper.pm
 
 
 # --- MakeMaker platform_constants section:
@@ -321,7 +325,7 @@ RCS_LABEL = rcs -Nv$(VERSION_SYM): -q
 DIST_CP = best
 DIST_DEFAULT = tardist
 DISTNAME = Fry-Shell
-DISTVNAME = Fry-Shell-0.14
+DISTVNAME = Fry-Shell-0.15
 
 
 # --- MakeMaker macro section:
@@ -462,70 +466,73 @@ POD2MAN = $(POD2MAN_EXE)
 
 
 manifypods : pure_all  \
-	lib/Fry/Config/YAML.pm \
-	lib/Fry/View/CLI.pm \
-	lib/Fry/Opt.pm \
-	lib/Fry/ReadLine/Gnu.pm \
-	lib/Fry/ReadLine/Default.pm \
-	lib/Fry/Base.pm \
+	lib/Fry/Lib/Default.pm \
 	lib/Fry/Shell.pm \
-	lib/Fry/Sub.pm \
-	lib/Fry/Dump/TreeDumper.pm \
-	lib/Fry/Lib/DBI.pm \
+	lib/Fry/ReadLine/Gnu.pm \
+	lib/Fry/Developer.pod \
+	lib/Fry/Cmd.pm \
 	lib/Fry/Lib/Inspector.pm \
 	lib/Fry/Lib.pm \
-	lib/Fry/Cmd.pm \
-	lib/Fry/Error.pm \
-	lib/Fry/Dump/DataDumper.pm \
-	lib/Fry/List.pm \
-	lib/Fry/ShellI.pm \
-	lib/Fry/Lib/Default.pm \
-	lib/Fry/Config/Default.pm \
+	lib/Fry/Base.pm \
+	lib/Fry/Lib/DBI.pm \
+	lib/Fry/ReadLine/Default.pm \
 	lib/Fry/Dump/Default.pm \
+	lib/Fry/Error.pm \
+	lib/Fry/Dump/TreeDumper.pm \
 	lib/Fry/Var.pm \
-	lib/Fry/Config/YAML.pm \
-	lib/Fry/View/CLI.pm \
+	lib/Fry/Config/Default.pm \
+	lib/Fry/ShellI.pm \
+	lib/Fry/List.pm \
 	lib/Fry/Opt.pm \
-	lib/Fry/ReadLine/Gnu.pm \
-	lib/Fry/ReadLine/Default.pm \
-	lib/Fry/Base.pm \
-	lib/Fry/Shell.pm \
+	lib/Fry/Config/YAML.pm \
 	lib/Fry/Sub.pm \
-	lib/Fry/Dump/TreeDumper.pm \
-	lib/Fry/Lib/DBI.pm \
+	lib/Fry/View/CLI.pm \
+	lib/Fry/Dump/DataDumper.pm \
+	lib/Fry/Lib/Default.pm \
+	lib/Fry/Shell.pm \
+	lib/Fry/ReadLine/Gnu.pm \
+	lib/Fry/Developer.pod \
+	lib/Fry/Cmd.pm \
 	lib/Fry/Lib/Inspector.pm \
 	lib/Fry/Lib.pm \
-	lib/Fry/Cmd.pm \
-	lib/Fry/Error.pm \
-	lib/Fry/Dump/DataDumper.pm \
-	lib/Fry/List.pm \
-	lib/Fry/ShellI.pm \
-	lib/Fry/Lib/Default.pm \
-	lib/Fry/Config/Default.pm \
+	lib/Fry/Base.pm \
+	lib/Fry/Lib/DBI.pm \
+	lib/Fry/ReadLine/Default.pm \
 	lib/Fry/Dump/Default.pm \
-	lib/Fry/Var.pm
+	lib/Fry/Error.pm \
+	lib/Fry/Dump/TreeDumper.pm \
+	lib/Fry/Var.pm \
+	lib/Fry/Config/Default.pm \
+	lib/Fry/ShellI.pm \
+	lib/Fry/List.pm \
+	lib/Fry/Opt.pm \
+	lib/Fry/Config/YAML.pm \
+	lib/Fry/Sub.pm \
+	lib/Fry/View/CLI.pm \
+	lib/Fry/Dump/DataDumper.pm
 	$(NOECHO) $(POD2MAN) --section=3 --perm_rw=$(PERM_RW)\
-	  lib/Fry/Config/YAML.pm $(INST_MAN3DIR)/Fry::Config::YAML.$(MAN3EXT) \
-	  lib/Fry/View/CLI.pm $(INST_MAN3DIR)/Fry::View::CLI.$(MAN3EXT) \
-	  lib/Fry/Opt.pm $(INST_MAN3DIR)/Fry::Opt.$(MAN3EXT) \
-	  lib/Fry/ReadLine/Gnu.pm $(INST_MAN3DIR)/Fry::ReadLine::Gnu.$(MAN3EXT) \
-	  lib/Fry/ReadLine/Default.pm $(INST_MAN3DIR)/Fry::ReadLine::Default.$(MAN3EXT) \
-	  lib/Fry/Base.pm $(INST_MAN3DIR)/Fry::Base.$(MAN3EXT) \
+	  lib/Fry/Lib/Default.pm $(INST_MAN3DIR)/Fry::Lib::Default.$(MAN3EXT) \
 	  lib/Fry/Shell.pm $(INST_MAN3DIR)/Fry::Shell.$(MAN3EXT) \
-	  lib/Fry/Sub.pm $(INST_MAN3DIR)/Fry::Sub.$(MAN3EXT) \
-	  lib/Fry/Dump/TreeDumper.pm $(INST_MAN3DIR)/Fry::Dump::TreeDumper.$(MAN3EXT) \
-	  lib/Fry/Lib/DBI.pm $(INST_MAN3DIR)/Fry::Lib::DBI.$(MAN3EXT) \
+	  lib/Fry/ReadLine/Gnu.pm $(INST_MAN3DIR)/Fry::ReadLine::Gnu.$(MAN3EXT) \
+	  lib/Fry/Developer.pod $(INST_MAN3DIR)/Fry::Developer.$(MAN3EXT) \
+	  lib/Fry/Cmd.pm $(INST_MAN3DIR)/Fry::Cmd.$(MAN3EXT) \
 	  lib/Fry/Lib/Inspector.pm $(INST_MAN3DIR)/Fry::Lib::Inspector.$(MAN3EXT) \
 	  lib/Fry/Lib.pm $(INST_MAN3DIR)/Fry::Lib.$(MAN3EXT) \
-	  lib/Fry/Cmd.pm $(INST_MAN3DIR)/Fry::Cmd.$(MAN3EXT) \
-	  lib/Fry/Error.pm $(INST_MAN3DIR)/Fry::Error.$(MAN3EXT) \
-	  lib/Fry/Dump/DataDumper.pm $(INST_MAN3DIR)/Fry::Dump::DataDumper.$(MAN3EXT) \
-	  lib/Fry/List.pm $(INST_MAN3DIR)/Fry::List.$(MAN3EXT) \
-	  lib/Fry/ShellI.pm $(INST_MAN3DIR)/Fry::ShellI.$(MAN3EXT) \
-	  lib/Fry/Lib/Default.pm $(INST_MAN3DIR)/Fry::Lib::Default.$(MAN3EXT) \
-	  lib/Fry/Config/Default.pm $(INST_MAN3DIR)/Fry::Config::Default.$(MAN3EXT) \
+	  lib/Fry/Base.pm $(INST_MAN3DIR)/Fry::Base.$(MAN3EXT) \
+	  lib/Fry/Lib/DBI.pm $(INST_MAN3DIR)/Fry::Lib::DBI.$(MAN3EXT) \
+	  lib/Fry/ReadLine/Default.pm $(INST_MAN3DIR)/Fry::ReadLine::Default.$(MAN3EXT) \
 	  lib/Fry/Dump/Default.pm $(INST_MAN3DIR)/Fry::Dump::Default.$(MAN3EXT) \
-	  lib/Fry/Var.pm $(INST_MAN3DIR)/Fry::Var.$(MAN3EXT) 
+	  lib/Fry/Error.pm $(INST_MAN3DIR)/Fry::Error.$(MAN3EXT) \
+	  lib/Fry/Dump/TreeDumper.pm $(INST_MAN3DIR)/Fry::Dump::TreeDumper.$(MAN3EXT) \
+	  lib/Fry/Var.pm $(INST_MAN3DIR)/Fry::Var.$(MAN3EXT) \
+	  lib/Fry/Config/Default.pm $(INST_MAN3DIR)/Fry::Config::Default.$(MAN3EXT) \
+	  lib/Fry/ShellI.pm $(INST_MAN3DIR)/Fry::ShellI.$(MAN3EXT) \
+	  lib/Fry/List.pm $(INST_MAN3DIR)/Fry::List.$(MAN3EXT) \
+	  lib/Fry/Opt.pm $(INST_MAN3DIR)/Fry::Opt.$(MAN3EXT) \
+	  lib/Fry/Config/YAML.pm $(INST_MAN3DIR)/Fry::Config::YAML.$(MAN3EXT) \
+	  lib/Fry/Sub.pm $(INST_MAN3DIR)/Fry::Sub.$(MAN3EXT) \
+	  lib/Fry/View/CLI.pm $(INST_MAN3DIR)/Fry::View::CLI.$(MAN3EXT) \
+	  lib/Fry/Dump/DataDumper.pm $(INST_MAN3DIR)/Fry::Dump::DataDumper.$(MAN3EXT) 
 
 
 
@@ -566,10 +573,10 @@ realclean_subdirs :
 realclean purge ::  clean realclean_subdirs
 	$(RM_RF) $(INST_AUTODIR) $(INST_ARCHAUTODIR)
 	$(RM_RF) $(DISTVNAME)
-	$(RM_F)  blib/lib/Fry/Config/Default.pm blib/lib/Fry/Lib/Inspector.pm blib/lib/Fry/Dump/TreeDumper.pm blib/lib/Fry/Dump/DataDumper.pm $(FIRST_MAKEFILE) blib/lib/Fry/List.pm blib/lib/Fry/Opt.pm
-	$(RM_F) blib/lib/Fry/Type.pm blib/lib/Fry/Config/YAML.pm blib/lib/Fry/ShellI.pm blib/lib/Fry/Shell.pm blib/lib/Fry/Lib.pm blib/lib/Fry/View/CLI.pm blib/lib/Fry/Lib/DBI.pm blib/lib/Fry/Lib/Default.pm
-	$(RM_F) blib/lib/Fry/ReadLine/Default.pm blib/lib/Fry/Cmd.pm blib/lib/Fry/Sub.pm blib/lib/Fry/Obj.pm blib/lib/Fry/Var.pm blib/lib/Fry/ReadLine/Gnu.pm blib/lib/Fry/Error.pm blib/lib/Fry/Dump/Default.pm
-	$(RM_F) $(MAKEFILE_OLD) blib/lib/Fry/Base.pm
+	$(RM_F)  blib/lib/Fry/Obj.pm blib/lib/Fry/Var.pm blib/lib/Fry/Dump/Default.pm blib/lib/Fry/Lib/DBI.pm blib/lib/Fry/Cmd.pm blib/lib/Fry/ReadLine/Gnu.pm blib/lib/Fry/Lib/Default.pm blib/lib/Fry/Error.pm
+	$(RM_F) blib/lib/Fry/Config/YAML.pm blib/lib/Fry/ReadLine/Default.pm blib/lib/Fry/Lib/Inspector.pm blib/lib/Fry/Sub.pm blib/lib/Fry/List.pm blib/lib/Fry/View/CLI.pm blib/lib/Fry/Shell.pm blib/lib/Fry/Base.pm
+	$(RM_F) blib/lib/Fry/Dump/TreeDumper.pm blib/lib/Fry/ShellI.pm blib/lib/Fry/Config/Default.pm blib/lib/Fry/Lib.pm blib/lib/Fry/Dump/DataDumper.pm blib/lib/Fry/Type.pm blib/lib/Fry/Developer.pod
+	$(RM_F) blib/lib/Fry/Opt.pm $(MAKEFILE_OLD) $(FIRST_MAKEFILE)
 
 
 # --- MakeMaker metafile section:
@@ -577,7 +584,7 @@ metafile :
 	$(NOECHO) $(ECHO) '# http://module-build.sourceforge.net/META-spec.html' > META.yml
 	$(NOECHO) $(ECHO) '#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#' >> META.yml
 	$(NOECHO) $(ECHO) 'name:         Fry-Shell' >> META.yml
-	$(NOECHO) $(ECHO) 'version:      0.14' >> META.yml
+	$(NOECHO) $(ECHO) 'version:      0.15' >> META.yml
 	$(NOECHO) $(ECHO) 'version_from: lib/Fry/Shell.pm' >> META.yml
 	$(NOECHO) $(ECHO) 'installdirs:  site' >> META.yml
 	$(NOECHO) $(ECHO) 'requires:' >> META.yml
@@ -845,7 +852,7 @@ testdb_static :: testdb_dynamic
 # --- MakeMaker ppd section:
 # Creates a PPD (Perl Package Description) for a binary distribution.
 ppd:
-	$(NOECHO) $(ECHO) '<SOFTPKG NAME="$(DISTNAME)" VERSION="0,14,0,0">' > $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '<SOFTPKG NAME="$(DISTNAME)" VERSION="0,15,0,0">' > $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <TITLE>$(DISTNAME)</TITLE>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <ABSTRACT></ABSTRACT>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <AUTHOR></AUTHOR>' >> $(DISTNAME).ppd
@@ -861,29 +868,30 @@ ppd:
 
 pm_to_blib: $(TO_INST_PM)
 	$(NOECHO) $(PERLRUN) -MExtUtils::Install -e 'pm_to_blib({@ARGV}, '\''$(INST_LIB)/auto'\'', '\''$(PM_FILTER)'\'')'\
-	  lib/Fry/Config/YAML.pm blib/lib/Fry/Config/YAML.pm \
-	  lib/Fry/View/CLI.pm blib/lib/Fry/View/CLI.pm \
-	  lib/Fry/Obj.pm blib/lib/Fry/Obj.pm \
-	  lib/Fry/Opt.pm blib/lib/Fry/Opt.pm \
-	  lib/Fry/ReadLine/Gnu.pm blib/lib/Fry/ReadLine/Gnu.pm \
-	  lib/Fry/ReadLine/Default.pm blib/lib/Fry/ReadLine/Default.pm \
-	  lib/Fry/Base.pm blib/lib/Fry/Base.pm \
+	  lib/Fry/Lib/Default.pm blib/lib/Fry/Lib/Default.pm \
+	  lib/Fry/Type.pm blib/lib/Fry/Type.pm \
 	  lib/Fry/Shell.pm blib/lib/Fry/Shell.pm \
-	  lib/Fry/Sub.pm blib/lib/Fry/Sub.pm \
-	  lib/Fry/Dump/TreeDumper.pm blib/lib/Fry/Dump/TreeDumper.pm \
-	  lib/Fry/Lib/DBI.pm blib/lib/Fry/Lib/DBI.pm \
+	  lib/Fry/ReadLine/Gnu.pm blib/lib/Fry/ReadLine/Gnu.pm \
+	  lib/Fry/Developer.pod blib/lib/Fry/Developer.pod \
+	  lib/Fry/Cmd.pm blib/lib/Fry/Cmd.pm \
 	  lib/Fry/Lib/Inspector.pm blib/lib/Fry/Lib/Inspector.pm \
 	  lib/Fry/Lib.pm blib/lib/Fry/Lib.pm \
-	  lib/Fry/Cmd.pm blib/lib/Fry/Cmd.pm \
-	  lib/Fry/Error.pm blib/lib/Fry/Error.pm \
-	  lib/Fry/Dump/DataDumper.pm blib/lib/Fry/Dump/DataDumper.pm \
-	  lib/Fry/List.pm blib/lib/Fry/List.pm \
-	  lib/Fry/ShellI.pm blib/lib/Fry/ShellI.pm \
-	  lib/Fry/Lib/Default.pm blib/lib/Fry/Lib/Default.pm \
-	  lib/Fry/Config/Default.pm blib/lib/Fry/Config/Default.pm \
-	  lib/Fry/Type.pm blib/lib/Fry/Type.pm \
+	  lib/Fry/Base.pm blib/lib/Fry/Base.pm \
+	  lib/Fry/Lib/DBI.pm blib/lib/Fry/Lib/DBI.pm \
+	  lib/Fry/ReadLine/Default.pm blib/lib/Fry/ReadLine/Default.pm \
 	  lib/Fry/Dump/Default.pm blib/lib/Fry/Dump/Default.pm \
-	  lib/Fry/Var.pm blib/lib/Fry/Var.pm 
+	  lib/Fry/Error.pm blib/lib/Fry/Error.pm \
+	  lib/Fry/Dump/TreeDumper.pm blib/lib/Fry/Dump/TreeDumper.pm \
+	  lib/Fry/Obj.pm blib/lib/Fry/Obj.pm \
+	  lib/Fry/Var.pm blib/lib/Fry/Var.pm \
+	  lib/Fry/Config/Default.pm blib/lib/Fry/Config/Default.pm \
+	  lib/Fry/ShellI.pm blib/lib/Fry/ShellI.pm \
+	  lib/Fry/List.pm blib/lib/Fry/List.pm \
+	  lib/Fry/Opt.pm blib/lib/Fry/Opt.pm \
+	  lib/Fry/Config/YAML.pm blib/lib/Fry/Config/YAML.pm \
+	  lib/Fry/Sub.pm blib/lib/Fry/Sub.pm \
+	  lib/Fry/View/CLI.pm blib/lib/Fry/View/CLI.pm \
+	  lib/Fry/Dump/DataDumper.pm blib/lib/Fry/Dump/DataDumper.pm 
 	$(NOECHO) $(TOUCH) $@
 
 # --- MakeMaker selfdocument section:

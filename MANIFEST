@@ -21,6 +21,7 @@ lib/Fry/ShellI.pm
 lib/Fry/Obj.pm
 lib/Fry/Type.pm
 lib/Fry/Sub.pm
+lib/Fry/Developer.pod
 t/pod.t
 t/list.t
 t/testlib/Fry/Lib/SampleLib.pm

@@ -2,8 +2,6 @@ package Fry::Lib;
 use strict;
 use base 'Fry::List';
 use base 'Fry::Base';
-#our @ISA;
-#push(@ISA,'Fry::ShellI');
 my $list = {};
 
 sub list { return $list }
@@ -142,14 +140,32 @@ sub list { return $list }
 	sub _loadDependencies ($$) {
 		my ($cls,$dt) = @_;	
 		if (exists ($dt->{depend})) {
-			for my $basename (@{$dt->{depend}}) {
-
-				#load if not loaded
-				unless(grep(/^$basename$/,$cls->listIds) > 0) {
-					$cls->loadLib($basename);
-				}
+			my @libs = @{$dt->{depend}};
+			$cls->checkAndLoadLibs(@libs);
+		}
+	}
+	sub checkAndLoadLibs {
+		my ($cls,@a_libs) = @_;
+		for my $lib (@a_libs) {
+			if (! $cls->libsLoaded($lib)) {
+				$cls->loadLib($lib)
 			}
 		}
+		return 1;
+	}
+	sub requireLibraries {
+		my ($cls,@libs) = @_;
+
+		$cls->checkAndLoadLibs(@libs) && 
+		$cls->view("Loaded libraries: ",join(',',@libs),"\n");
+	}
+	sub libsLoaded {
+		my ($cls,@libs) = @_;
+		@libs = $cls->fullName(@libs);
+		for my $lib (@libs) {
+			return 0 if (! grep(/^$lib$/,$cls->listIds) > 0);
+		}
+		return 1;
 	}
 	sub reloadLibs ($@) {
 		my ($cls,@libs) = @_;
@@ -209,6 +225,9 @@ A Fry::Lib object has the following attributes:
 	loadLibs(@libs):  loads libraries
 	unloadLib(@libs): unloads libraries
 	reloadLibs(@libs): reloads libraries, uses again.pm
+	checkAndLoadLibs(@libs): loads libraries if not loaded
+	libsLoaded(@libs): returns boolean indicating if libraries are loaded
+	requireLibraries(@libs): commandline version of &checkAndLoadLib
 	initLibs(@libs): loads libraries and runs &runLibInits on them
 
 =head1 SEE ALSO

@@ -11,7 +11,7 @@ use base 'Fry::Base';
 #use Data::Dumper;
 #use diagnostics;
 #use Fry::Wrap;
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 our $Count;
 our @ISA;
 #for saveArray,varMany
@@ -479,7 +479,7 @@ Fry::Shell - Flexible shell framework which encourages using loadable libraries 
 
 =head1 VERSION	
 
-This document describes version 0.14.
+This document describes version 0.15.
 
 =head1 DESCRIPTION 
 
@@ -535,7 +535,7 @@ Here's a quick rundown of Fry::Shell's features:
 Although this code is decently tested and is apparently unbuggy, I
 consider it alpha until a few design issues have been solved. 
 
-Oh yeah, some abbreviations I use often in this module, especially in naming
+Oh yeah, some abbreviations I use often in these modules, especially in naming
 subroutines:
 cmd- command, lib- library,opt- option,var-variable, gen- general, attr- attribute .
 
@@ -652,7 +652,7 @@ its configuration data. Its explicitly run via &Fry::Lib::runLibInits.
 
 =head3 Writing Library Functions
 
-See Fry::ShellI for the complete list of public shell methods you can use when writing a library's
+See L<Fry::ShellI> for the complete list of public shell methods you can use when writing a library's
 commands.
 
 A dilemma you mave come across when developing more complex libraries is
@@ -745,6 +745,7 @@ Expected methods:
 
 =head3 Details 
 
+Configurations are a quick way to define/redefine shell components such as variables and options.
 There are two configurations read when initializing the shell ,a core one and a global one. The core
 one is read after loading default data. Since the core config is read before you can specify your
 preferred config plugin, it will always be read by Fry::Config::Default. See the section Configuring
@@ -754,6 +755,13 @@ Configurations can also be loaded at the script level via &loadFile.
 
 	$sh->loadFile('/home/dope/.mylovelyconfig');
 
+If you're unable to set an object's attribute through the config then you can always use a script
+method defined by the Fry::ShellI interface. For an example with a shell object $sh:
+
+	$sh->call(lib=>'set',':MyLib',class=>'MyLib');
+
+See the t/testlib/ directory for sample configurations.
+	
 =head3 Config Data Structure Format
 
 	A configuration defines a hashref similar to a library's &_default_data, no suprise since
@@ -781,7 +789,7 @@ indicated otherwise):
 	fh: current filehandle for output
 	view_options(\%): contains options to be passed at
 	eval_splitter: used by &parseEval to delimit where normal parsing ends and where eval parsing begins
-	field_delimiter: delimits fields used by Fry::View::* modules
+	field_delimiter: delimits fields used in view subroutines
 	fh_file: used with fh_file option to specify filename
 	pager: name of preferred pager
 	mline_char: regular expression indicating end of a multiline command
@@ -804,7 +812,7 @@ indicated otherwise):
 
 =head2 Error
 
-See Fry::Error for details.
+See L<Fry::Error> for details.
 
 =head1 Miscellaneous
 
@@ -874,11 +882,11 @@ mline_char, default being ';'. Multiple lines of input are joined by a whitespac
 
 This is a sweeet feature implented via &classAct and &objectAct that allow
 you to load a normal module and act on its object and/or class methods.
-See Fry::Lib::Default for details.
+See L<Fry::Lib::Default> for details.
 
 =head2 Argument Checking
 
-By default, any command with an arg attribute has its arguments checked. See Fry::Cmd for details.
+By default, any command with an arg attribute has its arguments checked. See <Fry::Cmd> for details.
 
 =head1 PUBLIC METHODS
 
@@ -929,10 +937,44 @@ name. Optional arguments are described in perl regular expression format.
 	postQuit(): Called after user has quit the shell via &shell. Useful for saving state of
 		shell ie command history.
 
+=head1 MODULE OUTLINE
+
+	An outline of all modules that come with Fry::Shell
+
+	Core classes
+		Fry::Var
+		Fry::Cmd
+		Fry::Opt
+		Fry::Obj
+		Fry::Lib
+		Fry::Type
+		Fry::Sub
+
+	Libraries
+		Fry::Lib::Default
+		Fry::Lib::DBI
+		Fry::Lib::Inspector
+
+	Plugins
+		Fry::Config::YAML
+		Fry::Config::Default
+		Fry::Error
+		Fry::Error::Carp
+		Fry::Dump::DataDumper
+		Fry::Dump::TreeDumper
+		Fry::Dump::Default
+		Fry::ReadLine::Default
+		Fry::ReadLine::Gnu
+		Fry::View::CLI
+
+	Other modules
+		Fry::List
+		Fry::Base
+		Fry::Shell
+		Fry::ShellI
+
 =head1 SEE ALSO
 	
-See Fry::Var, Fry::Cmd, Fry::Opt, Fry::List, and Fry::Lib for shell component details.
-
 See Fry::Lib::* for available libraries.
 
 For similar light shells, see L<Term::Shell>,L<Shell::Base> and

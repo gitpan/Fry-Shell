@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict qw/vars subs/;
 
-use Test::More tests=>14;
+use Test::More tests=>16;
 use lib 'lib';
 use lib 't/testlib';
 
@@ -41,10 +41,12 @@ is_deeply(&Fry::Lib::SampleLib::_initLib,'CmdClass','&runLibInits requires libra
 
 	is(main->loadLib('Blah'),0,'&loadLib: invalid lib exits early');
 #other
-	#use Data::Dumper;
+	use Data::Dumper;
 	#print Dumper(main->list);
 	#print @CmdClass::ISA,"\n";
 	#print @Fry::Sub::_Methods::ISA,"\n";
+	ok(main->libsLoaded(':SampleLib',':EmptyLib'),'&libsLoaded: pass');
+	ok(! main->libsLoaded(':PhoneyLib'),'&libsLoaded: fail');
 	main->unloadLib('Fry::Lib::SampleLib');
 	main->unloadLib('Fry::Lib::EmptyLib');
 	is_deeply([@CmdClass::ISA],[],'unloadLib: shell ISA cleaned');

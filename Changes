@@ -1,3 +1,5 @@
+0.15 Wed Jan 12 2005
+	- made a few Fry::Lib methods, included Fry::Developer.pod, slight documentation tweaks
 0.14 Sun Jan  9 2005
 	- added documentation for developers
 	- made Fry::Error a plugin
