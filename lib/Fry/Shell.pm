@@ -5,11 +5,11 @@
 	use warnings;
 	use base 'Class::Data::Global';
 	use Term::ReadLine;
-	our $VERSION = '0.07';
+	our $VERSION = '0.08';
 	our @ISA;
 	our ($term);
 	my $mcount =0;
-	my $debug = 0;
+	my $debug = 1;
 	eval { require Data::Dumper};
 	$Data::Dumper::Indent = 0;
 	$Data::Dumper::Purity = 1;
@@ -345,7 +345,7 @@
 		debug "load $module\'s class data\n";
 
 		#class data
-		$class->mk_many_global(%{$module->_default_data->{global}});
+		$class->check_or_mk_global(%{$module->_default_data->{global}});
 		$class->add_to_hash(help_data=>$module->_default_data->{help});
 		#$module->mk_many(%{$module->_default_data->{local}});
 
@@ -387,7 +387,7 @@
 
 		if ($debug) {
 			require Data::Dumper;
-			print Dumper(\%var),"\n";
+			print Data::Dumper::Dumper(\%var),"\n";
 		}
 	}
 	sub parse_normal {
@@ -474,7 +474,7 @@
 	sub setoptions {
 		my ($class,$option_value) = @_;
 		my (%arg);
-		if ($debug) { print Dumper($option_value),"\n"};
+		if ($debug) { print Data::Dumper::Dumper($option_value),"\n"};
 
 		while (my ($k,$v) = each %$option_value){
 			my $key_count=0;
@@ -573,7 +573,7 @@ Fry::Shell - Create commandline application with plugin libraries.
 
 =head1 VERSION	
 
-This document describes version 0.07.
+This document describes version 0.08.
 
 =head1 DESCRIPTION 
 
@@ -750,7 +750,7 @@ given prints all descriptions
 
 =head1 Class Methods to Redefine
 
-	You can redefine these in your application's namespace.
+You can redefine these in your application's namespace.
 
 =over 4
 
