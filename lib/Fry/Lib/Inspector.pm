@@ -1,16 +1,13 @@
 package Fry::Lib::Inspector;
 #use Class::Handle;
-use Class::Inspector;
+use base 'Class::Inspector';
 use strict;
-our ($cls);
 
 #none of this is currently used
 sub _default_data {
 	return {
 		class=>'Class::Inspector',	
-		lib=>{ cmds=>[qw/installed loaded filename resolved_filename functions methods/]
-			#arg:class
-		},
+		methods=>[qw/installed loaded filename resolved_filename functions methods/],
 	}
 }
 1;

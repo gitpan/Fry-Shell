@@ -1,12 +1,12 @@
 package Fry::ReadLine::Default;
-our $o;
-sub setup {$o = $_[1]}
-sub addhistory {}
+use base 'Fry::Base';
+sub setup {}
+sub stdin {}
 sub prompt {
-	my ($class,$prompt) = @_;
-	$o->view("\n".$prompt);
+	my ($cls,$prompt) = @_;
+	$cls->view("\n".$prompt);
 	chomp(my $entry = <STDIN>);
-	#$o->addhistory($entry);
+	#$cls->addhistory($entry);
 	return $entry;
 }
 1;

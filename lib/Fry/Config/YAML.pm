@@ -1,9 +1,11 @@
 package Fry::Config::YAML;
-use YAML;	
-	sub read {
-		my ($class,$file) = @_;	
-		return YAML::LoadFile($file) || {}
-	}
+use YAML ();	
+
+sub setup {}
+sub read {
+	my ($class,$file) = @_;	
+	return YAML::LoadFile($file) || {}
+}
 1;
 
 __END__	

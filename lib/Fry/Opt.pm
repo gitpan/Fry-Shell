@@ -3,32 +3,36 @@ use strict;
 use base 'Fry::List';
 use base 'Fry::Base';
 my $list = {};
+our $DEBUG;
+require Data::Dumper if $DEBUG;
 
-#sub list { return $list }
-#sub _hash_default {return {qw/default 0 type none/} }
+sub list { return $list }
 sub _hash_default {return {qw/type none default 0/} }
 
 	sub Opt ($$) {
 		#d: special case of get w/ 'value'
-		my ($cls,$id) = @_;
+		my ($cls,$a_opt) = @_;
 		#only allow defined id past here
-		$id = $cls->findAlias($id) || return undef;
+		my $id = $cls->findAlias($a_opt) || do { warn("option '$a_opt' isn't valid",1);
+			return undef };
 
-		my $type = $cls->obj($id)->{type};
+		my $type = $cls->get($id,'type');
 
 		if ($type eq "var") {
-			return $cls->_varClass->get($id,'value')
+			return $cls->var->get($id,'value')
 		}
 		elsif ($type eq "flag") {
-			return $cls->_shellClass->Flag($id);
+			return $cls->Flag($id);
 		}
-		else { return $cls->obj($id)->{value} }
+		else { return $cls->get($id,'value') }
 	}
 	sub findSetOptions ($) {
 		my $cls = shift;
 		my %opt;
 		for my $opid ($cls->listIds) {
-			$opt{$opid} = $cls->Opt($opid) if ($cls->Opt($opid) ne $cls->obj($opid)->{default})
+			#skip data structures,only look for set scalar opts
+			next if (ref $cls->Opt($opid));
+			$opt{$opid} = $cls->Opt($opid) if ($cls->Opt($opid) ne $cls->get($opid,'default'));
 		}
 		return %opt;
 	}
@@ -38,75 +42,65 @@ sub _hash_default {return {qw/type none default 0/} }
 		for my $opid ($cls->listIds) {
 
 			#skip reset
-			if (exists $cls->obj($opid)->{stop} && $cls->obj($opid)->{stop} > 0) {
-				$cls->obj($opid)->{stop} = $cls->obj($opid)->{stop} - 1;
+			if (exists $cls->Obj($opid)->{stop} && $cls->get($opid,'stop') > 0) {
+				$cls->_obj($opid)->{stop} = $cls->_obj($opid)->{stop} - 1;
 				next if (! exists $options->{reset});
 			}
-			next if ($cls->obj($opid)->{noreset} && ! exists $options->{reset});
+			next if ($cls->_obj($opid)->{noreset} && ! exists $options->{reset});
 
-			$opt{$opid} = $cls->obj($opid)->{default} || 0;
+			$opt{$opid} = $cls->get($opid,'default');
+			#$opt{$opid} = $cls-_>obj($opid)->{default} || 0;
 		}
+		print Dumper \%opt if $DEBUG;
 		$cls->setOptions(%opt);
 	}
 	sub setOptions ($%) {
 		#d: special case of setMany w/ 'value'
 		my ($cls,%arg) = @_;
 
-		while (my ($id,$value) = each %arg) {
+		while (my ($a_id,$value) = each %arg) {
 			#convert alias to fullname
-			$id = $cls->findAlias($id) || do { $cls->_warn("option $id isn't valid, skipped");next };
+			my $id = $cls->findAlias($a_id) || do { warn("option $a_id isn't valid, skipped",1);next };
 			#td: convert to %opttype
-			my $type = $cls->obj($id)->{type};
+			my $type = $cls->get($id,'type') || '';
 
 			if ($type eq "flag") {
-				#$cls->{flag}{$id} = $value;
-				$cls->_shellClass->setFlag($id=>$value);
+				$cls->setFlag($id=>$value);
 			}
 			elsif ($type eq "var") {
-				$cls->_varClass->set($id,'value',$value);
+				$cls->var->set($id,'value',$value);
 			}
 			#elsif ($type eq "sub") { 
 				#$cls->{opt}{$id}{value} = $value ;
 				#$cls->$id($value);
 			#}
-			else { $cls->obj($id)->{value} = $value }
+			else { $cls->_obj($id)->{value} = $value }
 
 		}
 	}
 	sub preParseCmd ($%) {
 		#d: need only opt ids so far	
 		my ($cls,%arg) = @_;
-		while (my ($id,$value) = each %arg) {
-			$id = $cls->findAlias($id) || do { $cls->_warn("option $id isn't valid, skipped");next };
+		while (my ($a_id,$value) = each %arg) {
+			my $id = $cls->findAlias($a_id) || do { warn("option $a_id isn't valid, skipped",1);next };
 
-			if (exists $cls->obj($id)->{tags} && $cls->obj($id)->{tags} =~ /counter/) {
-				$cls->obj($id)->{stop} = 1;
+			if (exists $cls->Obj($id)->{tags} && $cls->get($id,'tags') =~ /counter/) {
+				$cls->_obj($id)->{stop} = 1;
 			}
 
-			if (exists $cls->obj($id)->{action}) {
-				$cls->obj($id)->{action}->($cls->_shellClass->_obj,$value);
+			if ($cls->get($id,'action')) {
+				#$cls->_obj($id)->{action}->($cls,$value);
+				$cls->callSubAttr(id=>$id,attr=>'action',args=>[$value]);
 			}
 		}
 	}
-
-	#Deprecated
-	sub setDefaults ($) {
-		my $cls = shift;
-
-		for my $opt ($cls->listIds) {
-			#if (! exists $cls->obj($opt)->{default}) {
-				#$cls->obj($opt)->{default} = (exists $cls->obj($opt)->{value}) ?
-				#$cls->obj($opt)->{value} : 0;
-				$cls->obj($opt)->{default} = ($cls->Opt($opt)) ?
-					$cls->Opt($opt): 0;
-					#}		
-		}
+	#only for testing
+	 sub _setDefaults ($) {
+	 	my $cls = shift;
+	           for my $opt ($cls->listIds) {
+			$cls->set($opt,'default',($cls->Opt($opt)) ?  $cls->Opt($opt): 0);
+	           }
 	}
-	#sub new ($%) {
-		#my ($class,%arg) = @_;
-		#$class->SUPER::new(%arg);
-		#$class->setDefaults;
-	#}
 1;
 
 __END__	
@@ -141,7 +135,7 @@ An option object has the following attributes:
 	noreset($): If set, the active option can't be reset (except for an overriding flag to &resetOptions).
 	*default($): Default value that an option starts with and is set to whenever reset. Default value is 0.
 
-=head1 Class Methods
+=head1 PUBLIC METHODS
 
 	Opt($opt): Returns an option's value.
 	findSetOptions(): Returns hash of options that differ from their default

@@ -6,15 +6,125 @@ my $list = {};
 
 sub list { return $list }
 
+	sub defaultNew {
+		my ($cls,%arg) = @_;
+		$cls->manyNew(%arg);
+		for my $cmd (keys %arg) {
+			#sub default
+			#make sure call is done by obj and not shell class
+			$cls->_obj($cmd)->{_sub} = sub {$cls->Caller->$cmd(@_) }
+				if (! exists $cls->_obj($cmd)->{_sub});
+
+			#usage default		
+			if (exists $cls->_obj($cmd)->{arg} && ! exists $cls->_obj($cmd)->{u}) {
+				#$o->{cmd}->_obj($cmd)->{u} ||= $o->{cmd}->_obj($cmd)->{arg}
+				my $arg = $cls->get($cmd,'arg') || return 0;
+				$arg =~ s/cmd/command/;
+				$arg =~ s/lib/library/;
+				$arg =~ s/opt/option/;
+				$arg =~ s/var/variable/;
+				$cls->_obj($cmd)->{u} = $arg;
+			}
+		}
+	}
+	sub argAlias ($$$) {
+		my ($cls,$cmd,$args) = @_;
+
+		my $alias_sub = $cls->get($cmd,'aa') || return 0;
+		if (ref $alias_sub eq "CODE") { @$args = $alias_sub->($cls->sub,@$args); }
+		else { @$args = $cls->Caller->$alias_sub(@$args) }
+
+		#td?: @$args = $cls->Sub($alias_sub,@$args);
+	}
+	sub _extractArgs {
+		my ($cls,$arg) = @_;
+		(ref $arg eq "ARRAY") ?  @$arg : split(/,/,$arg);
+	}
+	sub checkArgs ($$@) {
+		my ($cls,$cmd,@args) = @_;
+
+		my $arg = $cls->get($cmd,'arg') || return 1;
+		my @argtypes = $cls->_extractArgs($arg);
+		for my $arg (@argtypes) {
+			my ($datatype,$usertype) = split(//,$arg,2);
+			#print "$datatype,$usertype\n";
+			my @testarg;
+			if ($datatype eq "\$") {@testarg = shift @args}
+			elsif ($datatype eq "@") { @testarg = @args; }
+			elsif ($datatype eq "%"){ @testarg = keys %{{@args}} }
+
+			my $testsub;
+			if ($cls->type->attrExists($usertype,'t')) {
+				$testsub = $cls->type->get($usertype,'t');
+			}
+			else {
+				$testsub = $cls->defaultTestName($usertype);
+			}
+
+			if (! $cls->sub->can($testsub)) {
+				warn("No test sub '$testsub' found, running defaultTest",2);
+				return 0 if (! $cls->runTest('defaultTest',@testarg));
+			}
+			#test case defined
+			else { return 0 if (! $cls->runTest($testsub,@testarg))  }
+			return 1
+		}
+	}
+	sub defaultTestName { return "t_$_[1]" }
+	sub runTest ($$) {
+		my ($cls,$test,@args) = @_;
+
+		if (! $cls->Sub($test,@args)) {
+		#if (! $cls->callSubAttr(id=>$test,args=>\@args)) 
+			warn(join(' ',@args).": invalid type(s)\n");
+			$cls->setFlag(skipcmd=>1);
+			return 0
+		}
+		return 1;
+	}
+	sub runCmd ($$@) {
+		my ($cls,$a_cmd,@args) = @_;
+
+		my $cmd = $cls->anyAlias($a_cmd);
+		#print "c: $cmd,a: @args\n";
+
+		if ($cls->attrExists($cmd,'_sub')) {
+			return $cls->Obj($cmd)->{_sub}->(@args);
+		}
+
+		#autodetect
+		if ($cls->Var('method_caller') == 1) {
+			if ($cls->Caller->can($cmd)) { 
+				return $cls->Caller->$cmd(@args) 
+			}
+			else { warn ("Command '$cmd' not in Caller's path",1) }
+		}
+		else {
+			if ($cls->Var('method_caller')->can($cmd)) {
+				return $cls->Var('method_caller')->$cmd(@args)
+			}
+			else { my $caller = $cls->Var('method_caller');
+			       	warn ("Command '$cmd' not in $caller\'s path",1) 
+			}
+		}
+
+		#elsif ($cls->lib->find(cmds=>$cmd,type=>'function')) { }
+		return $cls->sh->loopDefault($cmd,@args);
+	}
+1;
+
+__END__	
+
+#OLD CODE
 	sub cmdChecks ($$@) {
 		my ($cls,$cmd,@args) = @_;
 		$cmd = $cls->anyAlias($cmd);
 		if ($cls->objExists($cmd) && exists $cls->obj($cmd)->{req}) {
 			my $module ="";
-			for $module (@{$cls->obj($cmd)->{req}}) {
+			for $module (@{$cls->_obj($cmd)->{req}}) {
 				eval "require $module";
 				if ($@) {
-					$cls->_shellClass->setFlag('skipcmd'=>1);
+					$cls->setFlag('skipcmd'=>1);
 					#warning issue
 					#$o->_warn("Required module $module not found. Skipping command\n").
 					return ;
@@ -22,64 +132,6 @@ sub list { return $list }
 			}	
 		}
 	}
-	sub argAlias ($$$) {
-		my ($cls,$cmd,$args) = @_;
-		if ($cls->objExists($cmd) && exists $cls->obj($cmd)->{aa}) { 
-			@$args = $cls->obj($cmd)->{aa}->($cls->_shellClass->obj,@$args);
-		}
-	}	
-	sub checkArgs ($$@) {
-		my ($cls,$cmd,@args) = @_;
-
-		#$cmd = $cls->anyAlias($cmd);
-		if ($cls->objExists($cmd) && exists $cls->obj($cmd)->{arg}) {
-			my @argtypes = (ref $cls->obj($cmd)->{arg} eq "ARRAY") ?
-			@{$cls->obj($cmd)->{arg}} : $cls->obj($cmd)->{arg} ;
-			for my $arg (@argtypes) {
-				my ($datatype,$usertype) = split(//,$arg,2);
-				#print "$datatype,$usertype\n";
-				my $testsub = "t_$usertype";
-				my @testarg;
-				if ($datatype eq "\$") {@testarg = shift @args}
-				elsif ($datatype eq "@") { @testarg = @args; }
-				elsif ($datatype eq "%"){ @testarg = keys %{{@args}} }
-				#elsif ($datatype eq "\$"
-
-				if (! $cls->_shellClass->_obj->can($testsub)) {
-					$cls->_shellClass->_obj->_warn("Testsub $testsub not found for user-defined type $usertype .\n")
-				}	
-				#test case defined
-				else {
-					if (! $cls->_shellClass->_obj->$testsub(@testarg)) {
-						#$cls->_warn(join(' ',@testarg),": invalid $usertype type(s)\n");
-						warn(join(' ',@testarg),": invalid $usertype type(s)\n");
-						$cls->_shellClass->setFlag(skipcmd=>1);
-						return 0
-					}
-				}
-				return 1
-				#$o->testArgType($datatype,$usertype,\@args);
-			}
-		}
-	}
-	sub runCmd ($$@){
-		my ($cls,$cmd,@args) = @_;
-
-		$cmd = $cls->anyAlias($cmd);
-		#print "c: $cmd,a: @args\n";
-
-		if ($cls->objExists($cmd) && exists $cls->obj($cmd)->{_sub}) {
-			return $cls->obj($cmd)->{_sub}->(@args);
-		}
-		#autodetect
-		#elsif ($cls->Var('cmd_class')->can($cmd)) { return $cls->Var('cmd_class')->$cmd(@args) }	
-		elsif ($cls->_shellClass->_obj->can($cmd)) { return $cls->_shellClass->_obj->$cmd(@args) }	
-		#else { return $o->loopDefault($cmd,@args); }
-		else { return $cls->_shellClass->_obj->loopDefault($cmd,@args); }
-	}
-1;
-
-__END__	
 
 =head1 NAME
 
@@ -124,9 +176,10 @@ the previous subrouting would be cmpl_var.
 
 You can turn off argument checking in the shell with the skiparg option.
 
-=head1 CLASS METHODS
+=head1 PUBLIC METHODS
 
-	cmdChecks($cmd,@args): Checks to run on command before executing it.
+	argAlias($cmd,$args): Aliases a command's arguments by modifying the given arguments
+		reference with the subroutine specified in the 'aa' attribute.
 	checkArgs($cmd,@args): If args attribute is defined runs tests on user-defined arguments.
 		If tests don't pass then warning is thrown and command is skipped.
 	runCmd($cmd,@args): Runs command with given arguments. Checks for aliases.

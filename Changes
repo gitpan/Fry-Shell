@@ -1,3 +1,10 @@
+0.14 Sun Jan  9 2005
+	- added documentation for developers
+	- made Fry::Error a plugin
+	- added 3 more shell components: Fry::Sub, Fry::Obj and Fry::Type
+	- library interface Fry::ShellI defined
+	- public methods of all nonlibrary classes documented!
+	- better test coverage
 0.11 Fri Oct 14 2004
 	-Major major revision! Plugins, clean OO framework implemented,divided shell into 4 main
 	components,readline support,minimal autoloaded libraries

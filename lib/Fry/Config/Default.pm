@@ -1,10 +1,12 @@
 package Fry::Config::Default;
-	sub read {
-		my ($class,$file) = @_;
-		our $conf = {};
-		do $file;
-		return $conf;
-	}
+
+sub setup {}
+sub read {
+	my ($class,$file) = @_;
+	our $conf = {};
+	do $file;
+	return $conf;
+}
 1;
 
 __END__	
@@ -13,9 +15,8 @@ __END__
 
 Fry::Config::Default - Default Config plugin for Fry::Shell.
 
-=head1 CLASS METHODS
+=head1 DESCRIPTION
 
-read($file): Requires the variable $conf from the specified file.
 A valid config file could be :
 
 	$conf =  {
@@ -24,6 +25,8 @@ A valid config file could be :
 			pager=>'more'
 		}
 	};
+
+Note: configuration data structure structure must be named $conf
 
 =head1 AUTHOR
 

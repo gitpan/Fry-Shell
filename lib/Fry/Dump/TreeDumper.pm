@@ -1,6 +1,6 @@
 package Fry::Dump::TreeDumper;
 use strict;
-use Data::TreeDumper;
+use Data::TreeDumper 'DumpTree';
 
 sub setup {}
 sub dump { my $class = shift; DumpTree(@_) }

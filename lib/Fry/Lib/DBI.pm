@@ -8,21 +8,24 @@ sub _default_data {
 			dsn=>{qw/mysql dbi:mysql: pg dbi:Pg:dbname= sqlite dbi:SQLite:dbname=/}, 
 			attr=>{},
 		},
-		lib=>{
-			#class: avail,data_sources,trace
-			#dbh: select*,do; table_info commit*,err,get_info,tables,type_info_all,primary_key_info
-			cmds=>[qw/selectall_arrayref selectall_hashref selectrow_arrayref selectrow_hashref
-				available_drivers trace get_info table_info column_info primary_key_info
-				tables type_info_all do err errstr set_err begin_work commit rollback/],
-			#other obj:
+		objs=>{
+			dbh=>{}
 		},
+		methods=>[qw/available_drivers trace data_sources/],
+		#all obj: err errstr set_err state func
+		class=>'DBI',
 	}
 }
 sub _initLib {
-	my ($o,%arg) = @_;
-	my ($dsn,$db,$dbname,$user,$pwd,$attr) = $o->varMany(qw/dsn db dbname user pwd attr/);
+	my ($cls,%arg) = @_;
+	my ($dsn,$db,$dbname,$user,$pwd,$attr) = $cls->varMany(qw/dsn db dbname user pwd attr/);
+	my $methods = [qw/selectall_arrayref selectall_hashref selectrow_arrayref selectrow_hashref
+		get_info table_info column_info primary_key_info
+		tables type_info_all do err errstr set_err begin_work commit rollback/],
 	#print join(',',$o->varMany(qw/dsn db dbname user pwd attr/));
-	$o->{obj}{dbh}{o} = $dbh = DBI->connect($dsn->{$db}.$dbname,$user,$pwd,$attr);
+	$dbh = DBI->connect($dsn->{$db}.$dbname,$user,$pwd,$attr);
+	$cls->obj->set('dbh','obj',$dbh);
+	$cls->obj->set('dbh','methods',$methods);	
 	#$o->lib->obj('Fry::Lib::DBI')->{obj}{dbh} = $dbh = DBI->connect($dsn->{$db}.$dbname,$user,$pwd,$attr);
 	#$o->{obj}{dbh}{class} = "Fry::Lib::DBI";
 }
@@ -30,9 +33,21 @@ sub _initLib {
 
 __END__	
 
+#unused
+sub create_dbh {
+	my $cls = shift;
+	my ($dsn,$db,$dbname,$user,$pwd,$attr) = $cls->varMany(qw/dsn db dbname user pwd attr/);
+	my $dbh = DBI->connect($dsn->{$db}.$dbname,$user,$pwd,$attr);
+	$cls->obj->set('dbh','obj',$dbh);
+}
+
 =head1 NAME
 
 Fry::Lib::DBI - Autoloaded library for DBI's object methods. 
+
+=head1 Example Command
+
+-p=e objectAct dbh selectall_arrayref,,'select * from perlfn'
 
 =head1 AUTHOR
 

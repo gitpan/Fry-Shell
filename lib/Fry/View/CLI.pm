@@ -1,12 +1,14 @@
 package Fry::View::CLI;
+use base 'Fry::Base';
 use strict;
 
-our ($o); 
-sub setup {$o = $_[1]}
+#our ($o); 
+sub setup {}
 sub view ($@) { 
 	my ($cls,@data) = @_;
 	no strict 'refs'; 
-	print { $o->Var('fh') } "@data" ;
+	#print $o->Var('fh'),":\n";
+	print { $cls->Var('fh') } "@data" ;
 }
 sub list ($@) {
 	my ($cls,@lines) = @_;
@@ -17,11 +19,13 @@ sub list ($@) {
 		$output .=  "$i: " ; #if ($class->_flag->{menu});
 		$output .=  "$_\n";	
 	}
-	$o->view($output);
+	$cls->view($output);
 }
 sub hash ($\%\%) {
 	my ($cls,$data,$opt) = @_;
 	my $output;
+	#uninit s///
+	no warnings;
 
 	#while (my ($k,$v) = each %$data) {
 	for my $k (($opt->{sort}) ? sort keys %$data : keys %$data) {
@@ -31,27 +35,38 @@ sub hash ($\%\%) {
 		$data->{$k} =~ s/$/'/g if ($opt->{quote});
 		$output .= $data->{$k}."\n";
 	}
-	$o->view($output);
+	$cls->view($output);
 }
 sub arrayOfArrays($@) {
 	my ($cls,@data) = @_;
 	my $output;
 	for my $row (@data) {
-		$output .= join($o->Var('field_delimiter'),@$row) . "\n";
+		$output .= join($cls->Var('field_delimiter'),@$row) . "\n";
 	}
-	$o->view($output);
+	$cls->view($output);
 }
-sub objAoH ($@) {
+sub file ($$$) {
+	my ($cls,$file,$data,$options) = @_;
+	open (FILE,'>',$file) or do {warn("Couldn't open filehandle for file $file");return };
+	my $oldfh = $cls->Var('fh');
+	$cls->setVar(fh=>'FILE');
+	$cls->view($data);
+	close FILE;
+	$cls->setVar(fh=>$oldfh);
+}
+sub objAoH_dt ($@) {
 	my ($cls,$data,$col) = @_;
 	my $output;
 	my $i;
 
 	for my $row  (@$data) {
-		if ($o->Flag('menu')) { $i++; $output .= "$i: "; }
-		$output .= join ($o->Var('field_delimiter'),map {$row->$_} @$col) ."\n" ;
+		if ($cls->Flag('menu')) { $i++; $output .= "$i: "; }
+		$output .= join ($cls->Var('field_delimiter'),map {$row->$_} @$col) ."\n" ;
 	}
-	$o->view($output);
+	return $output;
 }
+sub objAoH ($@) { $_[0]->view(shift->objAoH_dt(@_)); }
+	#my ($cls,$data,$col) = @_;
 1;
 
 __END__	
@@ -62,12 +77,6 @@ Fry::View::CLI - Default View plugin for Fry::Shell displaying to the commandlin
 
 =head1 CLASS METHODS
 
-	view(@): General view method called by all other view methods.	
-	list(@): Displays an array one value per line. 
-	hash(\%arg\%options): Displays a hashref, a key-value pair per line. Also takes
-		an options hash which can be passed a quote flag to quote values.
-	arrayofArrays(@): Displays an array of arrays with an array per line separated by the
-		variable field_delimiter.
 
 
 =head1 AUTHOR
