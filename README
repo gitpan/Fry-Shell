@@ -2,30 +2,49 @@ INSTALL
 	perl Makefile.PL; make; make test; make install;
 	Do 'make install' as root if installing into root-protected directories
 Description
-	This a framework for building shells and commands around user-defined functions and
-	libraries.
+	Flexible shell framework which encourages using loadable libraries of functions.
 Features
-	-subclassable: all functions are defined as class methods making this module easily subclassable
-	-libraries: load libraries of functions automatically, libraries can come with default global data
-	-data: user-configurable variables defined as global data and are highly configurable
-	at several levels( global config file,library defaults,library config file,script and
-	commandline)
-	-options: can be called from commandline or shell to pass values to global data and any functions
-	-basic metadata functions: set and print global data,listing of functions  
-	-integrated help: supports defining description and usage help for user-defined functions, 
-	-alias shell functions
-	-parsing modes: can change how current line is parsed on the fly by flipping the parsing option, comes
-	with a handy parse_menu parse mode
-	- should work with any database working under Class::DBI; verified to work with
-	  Mysql,Postgres and Sqlite.
-ToDo
-	- Redesign to allow plugin architecture for loading data, readline, storing
-	data, printing data. By making any external modules plugins, one can
-	have a minimal shell and install external modules as desired.
-	- support libraries which have object methods, currently only class methods supported  
-	- autocompletion support
-	- make design more OO: suggestions welcome :) 
-	- better library plugin support
+	- Subclassable: almost all functions are defined as class methods making this module easily subclassable
+	- Loading/unloading shell components at runtime.
+	- Flexible framework for using shell features via plugins.	 
+		You can even set up a bare minimum shell needing no external modules! Currently
+		plugins exist for dumping data,readline support,reading shell configurations and
+		viewing shell output. 
+	- Commands and options can be aliased for minimal typing at the commandline.
+	- Commands can have help and usage defined. 
+	- Commands can have user-defined argument types. 
+		One defines argument types by subroutines or tests that they should pass.
+		These tests are then applied to a command's defined argument(s).
+		With defined argument types, one can also define autocompletion
+		routines for a command's arguments.
+	- Options can modify variables.
+		Since variables exist for almost every aspect of the shell, options
+		can change many core shell functions. A handy example is 'parsesub'
+		which names the current parse subroutine for the current line.
+		Changing this var would change how the input after the options is
+		parsed.
+	- Options can have different behaviors defined including the ability to invoke
+		subroutines when called or to maintain a value for a specified amount of iterations. 
+	- Default options include 'menu' which numbers output and allows the next command to
+	reference them by number.
+	- Page output with preferred pager.
+	- Multiline mode.
+	- Comes with a decent default library,Fry::Lib::Default, to dump,list or
+		unload any shell component, run system commands,evaluate perl statements
+		and execute methods of autoloaded libraries.
+FAQ
+	What are some good uses for this module?
+		- Interactively using groups of functions. WWW::Mechanize and DBI modules come to mind.
+		- An organizer of small scripts: If you start amassing several scripts around a common module or theme, put them in the same library to see
+			what common features they have in order to modularize them. You can still 
+			call any of them from the commandline since a fry-shell script takes a command and its
+			arguments as initial arguments.
+		- A tool for doing repetitive,tedious tasks easily. With the parse_menu parse mode, I
+			can easily alias several often-used arguments to numbers and
+			perform commands on the numbers more easily.
+	What this shell is not for?
+		Not a replacement for your shell. This is more like a handy shell I keep open in one of my terminal tabs to be used when needed. 
+		Look to other well developed perl shells like Zoidberg and Psh.
 License
 	Perl's
 	

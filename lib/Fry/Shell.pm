@@ -1,403 +1,493 @@
 #!/usr/bin/perl
 #declarations
-	package Fry::Shell;
-	use strict qw/vars subs/;
-	use warnings;
-	use base 'Class::Data::Global';
-	use Term::ReadLine;
-	our $VERSION = '0.09';
-	our @ISA;
-	our ($term);
-	my $mcount =0;
-	my $debug = 0;
-	eval { require Data::Dumper};
-	$Data::Dumper::Indent = 0;
-	$Data::Dumper::Purity = 1;
+package Fry::Shell;
+use strict;
+use warnings;
+#use diagnostics;
+use Fry::Base;
+use base 'Fry::Error';
+#use Fry::Wrap;
+our $VERSION = '0.11';
+our $Count;
+our @ISA;
+my $shellobj;
 
-
+#core data
 	sub _default_data {
 		return {
-			global=>{
-				_conf_file=>$ENV{HOME}."/.shell.yaml",
-				_conf_dir=>$ENV{HOME}."/.shell/conf/",
-				_parse_mode=>'n',
-				_flag=>{},
-				_fh=>'STDOUT',
-				_alias_cmds=>{qw/h help_usage \p perl_exe q quit \ld list_global_data
-				       \pd print_global_data \sd set_global_data \lo list_options
-					   \lc list_commands \h help_description/},
-				_alias_vars=>{qw/p _parse_mode/},
-				_alias_flags=>{qw/m menu/},
-				_alias_subs=>{},
-				_alias_parse=>{n=>'parse_normal', m=>'parse_menu'},
-				_option_value=>{},
-				prompt=>'Lame-o-prompt',
-				lines=>[],
-				help_data=>{},
-				base_class=>'Fry::Shell::Base',
+			opts=>{
+				menu=>{qw/a m type flag tags counter/,
+					action=> sub{ $_[0]->{opt}->setOptions(parsesub=>'m');
+					$_[0]->{opt}->preParseCmd(parsesub=>'m')}},
+				parsesub=>{qw/a p type var default n tags counter/},
+				multiline=>{qw/a M type flag tags counter/},
+				fh_file=>{qw/a f type var/,
+					action=>sub{open(*F::FILE,'>',$_[0]->Var('fh_file')) or die "noo: $!";
+					$_[0]->setVar(fh=>'F::FILE'); $_[0]->{flag}{closefh}++ }},
+				pager=>{qw/a l type flag/,
+					action=>sub { open(*F::PAGER,"| ".  $_[0]->Var('pager'));
+					$_[0]->setVar(fh=>'F::PAGER');$_[0]->{flag}{closefh}++ }},
+				skiparg=>{qw/a S type flag noreset 1/},
+				autoview=>{qw/a av type flag noreset 1 default 1/},
+				class_act_new=>{qw/a cn/,action=>\&classActNew}, 
+				#action_class=>{qw/a C type var noreset 1/}, 
 			},
-			help=>{ 
-				help_usage=>{d=>'Prints usage of function(s)',u=>'<@commands>'},
-				help_description=>
-					{d=>'Prints brief description of function(s)',u=>'<@commands>'},
-				perl_exe=>
-					{d=>'Executes arguments as perl code with eval',u=>'$perl_code'},
-				list_options=>,
-					{d=>'Lists loaded options and their aliases',u=>''},
-				list_commands=>
-					{d=>'Lists loaded commands and their aliases',u=>''} ,
-				set_global_data=>
-					{ d=>'Set a global data accessor equal to any data structure since it is evaled',
-					u=>'$accessor $data_structure'},
-				print_global_data=> 
-					{ d=>'Print global data accessors and their values',
-					u=>'@global_data'},
-				list_global_data=>
-					{d=>'List global data accessors',u=>''}
-			}
+			vars=>{
+				alias_parse=>{n=>'parseNormal', m=>'parseMenu',e=>'parseEval'},
+				defaultlib=>'Fry::Lib::Default',
+				base_class=>'baseClass',
+				cmd_class=>'CmdClass',
+				plugin_config=>'Fry::Config::Default',
+				plugin_readline=>'Fry::ReadLine::Default',
+				plugin_dump=>'Fry::Dump::Default',
+				plugin_view=>'Fry::View::CLI',
+				defaultlibs=>[],
+				parsesub=>'n',
+				warnsub=>'warn',
+				diesub=>'die',
+				fh=>'STDOUT',
+				view_options=>'',
+				eval_splitter=>',,',
+				field_delimiter=>',,',
+				fh_file=>'',
+				pager=>'less',
+				mline_char=>';',
+				pipe_char=>'\|\s*',
+				prompt=>'!fry shell!:', 
+				core_config=>$ENV{HOME}.'/.frycore',
+				global_config=>$ENV{HOME}.'/.fryshellrc',
+				lines=>[],
+				loaded_libs=>[],
+				#conf_dir=>$ENV{HOME}."/.shell/conf/",
+				#global_config=>$ENV{HOME}."/.shell2.yaml",
+				#td:  hash of get/set subs for opt types
+				#opttype=>{},
+				#loglevel=>'1',
+			},
 		}
 	}
-#public methods
-	sub sh_init {
-		my ($class,%config) = @_;
-		my %arg;
-		
-		#load module's default data
-		$class->load_class_data(__PACKAGE__);
 
-		#process conf_file
-		if (exists $config{conf_file}) {
-			$class->_conf_file($config{conf_file});
-			delete $config{conf_file}; 
-		}	
-		#loads shellwide config file
-		$class->read_file($class->_conf_file);
-
-		#process load_libs option
-		$class->check_or_mk_global(libs=>'');
-		if (exists $config{load_libs}) {
-			my @list;
-			if (ref($config{load_libs}) eq "ARRAY") {
-				@list = @{$config{load_libs}};
-			}	
-			elsif(not ref($config{load_libs})) {
-				@list = $config{load_libs}
-			}
-			else {warn "load_libs not passed correct reference" }
-
-			push(@{$class->libs},@list);
-			delete $config{load_libs};
-		}
-
-		#loads libs,defines class data + config data 
-		$class->load_libs;
-
-		#td: load plugins
-
-		#init ReadLine
-		$term =  Term::ReadLine->new('gdbi');
-
-		$class->load_script_data(%config);
-
-		#load option data
-
-			#h: safety measure for carelessly defining options
-			#make global vars from option_value{vars}
-			my %varhash = map {$_,'undef' } (values %{$class->_alias_vars});
-			$class->check_or_mk_global(%varhash);
-
-			#Load data from commandline
-			#supports default option value setting
-			$class->setoptions($class->_option_value);
-
-		#td: default library initializations after all data set
-		$class->default_lib_actions;
-	}
-	sub load_script_data {
-		my ($class,%config) = @_;
-
-		if (exists $config{prompt}) {
-			$class->prompt($config{prompt});
-			delete $config{prompt}
-		}	
-
-		if (exists $config{global}) {
-			$class->set_or_mk_global(%{$config{global}});
-			delete $config{global};
-		}	
-
-		if (exists $config{help}) {
-			$class->add_to_hash('help_data',$config{help});
-			delete $config{help}
-		}
-
-		#load script data
-		for (keys %config) {
-			#keys:alias,option_value,_alias_parse,_alias_*
-			#adjust option names to match accessor names
-			my $accessor = (/^alias_|option_/) ? "_".$_ : $_;
-			$class->add_to_hash($accessor,$config{$_});
-		}
-	}
-	sub main_loop {
+	sub import {
 		my $class = shift;
-		my ($cmd,@args);
+		no strict 'refs';
+		my $caller = (caller())[0];	
+		#print "$class\n";
+		*{"${caller}::shell"} = \&shell;
+	}	
+#public methods
+	sub new ($%) {
+		my ($class,%arg) = @_;
+		$arg{_stage} = $arg{_stage} || -1;
+		my %obj = (qw/lib Fry::Lib cmd Fry::Cmd var Fry::Var opt Fry::Opt/);
+		$obj{flag} = {};
+		$obj{obj} = {};
 
-		#initialize shell
-		if (ref $_[0] eq "HASH") {
-			$class->sh_init(%{shift()});
-		}
+		my $o = bless \%obj,$class;
+		*shellobj = \$o;
 
-		#start loop
-		($class,$cmd,@args) = $class->once(@_);
-		#while ($cmd ne "q") {
-		#while ($class->_alias_cmds->{$cmd} ne "quit") {
-		while ($cmd ne "quit") {
-			($class,$cmd,@args) = $class->once;
-		}
+		$o->initCoreClasses(\%arg);
+
+		#tell Fry::Base's about var class
+		$o->{var}->_varClass($o->{var});
+
+		return $o if ($arg{_stage} == 1);
+
+		$o->setCoreData(\%arg);
+		$o->initISA;
+		return $o if ($arg{_stage} == 2);
+
+		$o->loadPlugins(qw/plugin_readline plugin_dump plugin_view plugin_config/);
+
+
+		#loadLibs
+			$o->loadLibs($o->Var('defaultlib'));
+			$o->loadLibs(@{$o->Var('defaultlibs')});
+			$o->loadLibs(@{delete $arg{libs}}) if (exists $arg{libs});
+
+		$o->setAllObj(%{delete $arg{load_obj}}) if (exists $arg{load_obj});
+
+		#set options to their defaults 
+		$o->{opt}->resetOptions({reset=>1});
+
+		#td: shouldn't allow early_core_vars in this config
+		$o->loadFile($o->Var('global_config'));
+
+		delete $arg{_stage};
+		#h: should check that variables don't already exist, could be a
+		#problem when variables have more attr than just a value
+		$o->setVarObj(%arg);
+		
+		$o->{lib}->runLibInits(@{$o->Var('loaded_libs')});
+
+		#?:setCmdlineOpts
+		#$o->setOptions(%{delete $arg{options}});
+
+		return $o;
 	}
-	sub once {
-		my $class= shift;
-		my %alias = %{$class->_alias_cmds};
-		my ($choice,@args);
+	sub shell (;$) {
+		my $o = shift || Fry::Shell->new;
+
+		$o->once(@_);
+		while (! $o->{flag}{quit}) {
+			$o->once;
+		}
+	}	
+	sub once ($@){
+		my $o = shift;
+		$Count++;
+		#i:
+		#print "loop $Count\n";
+
+		$o->preLoop;	
 
 		#input: if @_ defined, skips prompting
-			my @answer = (@_) ? @_ : $class->input;
+		my $input= (@_) ? "@_" : $o->getInput;
+		return if $input eq "";	
 
-		#parse
-			@answer = $class->check_for_options(@answer);
-			#h: change current class	
-			$class = $class->change_class if ($class->_flag->{change_class});
-			#print "class: $class\n";
-			#parse hash table
-			my $currentparse = $class->_parse_mode;
-			my $method = $class->_alias_parse->{$currentparse};
-			if (defined $method) {
-				($choice,@args) = $class->$method(@answer);
-			}
-			elsif ($class->can($currentparse)) {($choice,@args) = $class->$currentparse(@answer)}
+		my @lastargs;
+		my @chunks = $o->parseChunks($input);
+		#info ,print Dumper \@chunks;
+		for my $chunk (@chunks) {
+			my ($cmd,@args) = $o->parseLine($chunk);
+			#@args = (@args,@lastargs); # unless ("@lastargs" ==1);# if (not @args);
 
-		#execute choice
-			if (($alias{$choice} or $choice or '') eq "quit") { return ($class,'quit') }
-			elsif (exists $alias{$choice}) {
-				$class->${\$alias{$choice}}(@args);
-			} 
-			elsif ($class->can($choice)) { $class->$choice(@args); }
-			else { $class->loop_default($choice,@args) }
-
-		$class->end_loop;
-
-		$class->_flag->{change_class} = 0;
-		#h:reset _parse_mode and associated flag
-		$mcount++ if ($class->_parse_mode eq "m");
-		if ($mcount > 1 && $class->_parse_mode eq "m") {
-			$class->_parse_mode("n");
-			$class->_flag->{menu}=0;
-			$mcount = 0;
+			#keep here for autodetected commands
+			$cmd = $o->findCmdAlias($cmd);
+			#$o->{cmd}->cmdChecks($cmd,@args);
+			#$o->{cmd}->argAlias($cmd,\@args);
+			$o->{cmd}->checkArgs($cmd,@args) unless ($o->{flag}{skiparg});
+			@lastargs = $o->runCmd($cmd,@args) if (! $o->{flag}{skipcmd}); 
+			$o->autoView($cmd,@lastargs) if ($o->{flag}{autoview})
 		}
-		return ($class,$choice,@args);
+		close($o->Var('fh')) or die "can't close file: $! " if ($o->{flag}{closefh}); 
+
+		$o->resetAll;
+		$o->postLoop;
 	}
-#shell functions	
-	sub help_usage {
-		my $class = shift;
-		my @functions;
-
-		#?: defined wouldn't would work
-		if (@_ == 0) {
-			@functions = sort keys %{$class->help_data}
-		}	
-		else { @functions = @_}
-
-		print "Note: wrap <> around optional chunks\n\n";
-
-		for (@functions) {
-			my $usage = (exists $class->help_data->{$_}->{u}) 
-			? $class->help_data->{$_}->{u} : "*none defined*" ;	
-		       print "$_ $usage\n"; 
-		}	
-
-		@functions = undef;
+	sub libObj ($$) { $_[0]->{lib}->obj($_[1]) }
+	sub optObj ($$) { $_[0]->{opt}->obj($_[1]) }
+	sub varObj ($$) { $_[0]->{var}->obj($_[1]) }
+	sub cmdObj ($$) { $_[0]->{cmd}->obj($_[1]) }
+	sub runCmd ($@) {shift->{cmd}->runCmd(@_) }
+	sub initLibs ($@) {
+		my ($o,@modules) = @_;
+		@modules = $o->{lib}->fullName(@modules);
+		$o->loadLibs(@modules);
+		$o->{lib}->runLibInits(@modules);
 	}
-	sub help_description {
-		my ($class,@functions) = @_;
-
-		if (@functions == 0) {
-			@functions = sort keys %{$class->help_data}
-		}	
-
-		for (@functions) {
-			my $description = (exists $class->help_data->{$_}->{d}) 
-			? $class->help_data->{$_}->{d} : "*none defined*" ;	
-			print "$_ : $description\n",
-		}	
+	sub loadLibs ($@) {
+		my ($o,@modules) = @_;
+		@modules = $o->{lib}->fullName(@modules);
+		for (@modules) { $o->loadLib($_) }
 	}
-	sub perl_exe {
-		my $class = shift;
-		eval "@_";
-	}
-	sub list_commands{
-		shift->list_hash("cmds");
-	}
-	sub list_options {
-		shift->list_hash("options");
-	}
-	sub set_global_data {
-		my $class = shift;
-		my $accessor = shift;
-		eval "$class->$accessor(@_)";
-	}	
-	sub print_global_data {
-		my $class = shift;
+	sub loadFile ($$) {
+		my ($o,$file) = @_;
 
-		eval {require Data::Dumper};
-		if ($@) { warn "Data::Dumper needed for this function";return}
-
-		my @data = (not defined $_[0]) ? sort @$Class::Data::Global::names :
-		@_; 
-		for (@data) {
-			print Data::Dumper->Dump([$class->$_],[$_]);
-			print "\n";
+		if (! -e $file) {
+			#W:info
+			#$o->_warn("Can't load file $file because it doesn't exist");
+			return;
 		}
+
+		$o->_require($o->Var('plugin_config'));
+		#my $conf = $o->Config->read($file) || {}; 
+		my $conf = $o->Var('plugin_config')->read($file) || {}; 
+		#W:debug
+		$o->setAllObj(%$conf);
 	}
-	sub list_global_data {
-		my $class = shift;
-		my $i;
-		my @sortednames = sort @$Class::Data::Global::names;
-		for  (@sortednames) {
-			$i++;
-			print "$i: $_\n";
-		}	
-		$class->lines(\@sortednames) if ($class->_flag->{menu});
-	}	
+	sub loadPlugins($@) {
+		my ($o,@plugins) = @_;
 
-	#INTERNAL METHODS
+		for (@plugins) {
+			$o->_require($o->Var($_),"$_ require failed:");
+			$o->Var($_)->setup($o) if ($o->Var($_)->can('setup'));
+		}
 
-	#for accessor hashes
-	sub add_to_hash {
-		my ($class,$accessor,$hashref) = @_;
-		my %temphash = (defined $hashref) ? %$hashref : ();
-
-		while (my ($k,$v) = each %temphash){
-			if (exists $class->$accessor->{$k}) {
-				warn "in accessor $accessor: overriding ",$class->$accessor->{$k}," with $v\n"; 
+		#log
+		#$o->_require("Log::Dispatch");
+		#$o->_require("Log::Dispatch::Screen");
+		#$o->_require("Log::Dispatch::File");
+		#$o->{plug}{log} = Log::Dispatch->new(callbacks=>\&logback);
+		#$o->{plug}{log}->add( Log::Dispatch::File->new( name => 'file1', min_level
+		#=> 'debug', filename => '/home/bozo/temp/logfile'));
+		#$o->{plug}{log}->add(Log::Dispatch::Screen->new(name=>'screen',min_level=>'debug',stderr=>0));
+		#print "d: ",$o->{plug}{log}->would_log("alert"),"\n";
+	}
+	sub setCmdObj ($%) {
+		my ($o,%arg) = @_;
+		$o->{cmd}->manyNew(%arg);
+		#h: setting strange default
+		for my $cmd (keys %arg) {
+			$o->{cmd}->obj($cmd)->{_sub} = sub {$o->$cmd(@_) }
+				if (! exists $o->{cmd}->obj($cmd)->{_sub});
+			if (exists $o->{cmd}->obj($cmd)->{arg} && ! exists $o->{cmd}->obj($cmd)->{u}) {
+				#$o->{cmd}->obj($cmd)->{u} ||= $o->{cmd}->obj($cmd)->{arg}
+				my $arg = $o->{cmd}->obj($cmd)->{arg};
+				$arg =~ s/cmd/command/;
+				$arg =~ s/lib/library/;
+				$arg =~ s/opt/option/;
+				$arg =~ s/var/variable/;
+				$o->{cmd}->obj($cmd)->{u} = $arg;
 			}	
-			$class->$accessor->{$k}= $v,
-		} 
+		}
+		
+		#if (! exists $o->{cmd}{$cmd}{_sub});
 	}
-	sub list_hash {
-		my ($class,$hashname) = @_;
+	sub setOptObj ($%) { shift->{opt}->manyNew(@_); }
+	sub setVarObj ($%) {
+		my ($o,%arg) = @_;
+		my (%empty) =  map {$_=> {} } keys %arg;
+		#w:defaults set b4 value
+		$o->{var}->manyNew(%empty);
+		$o->setVar(%arg);
+		#$o->setGenHashDefault('var',[keys %arg],{scope=>'global'});
+	}
+	sub setLibObj ($%) { shift->{lib}->manyNew(@_) }
+	sub setAllObj ($%) {
+		my ($o,%data) = @_;
+		$o->setVarObj(%{$data{vars}}) if (exists $data{vars});
+		$o->setOptObj(%{$data{opts}}) if (exists $data{opts});
+		$o->setCmdObj(%{$data{cmds}}) if (exists $data{cmds});
+	}
+#private methods
+	sub _obj { return $Fry::Shell::shellobj; }
+	##new subs
+	sub initISA ($) {
+		my $o = shift;
+		#actions based on core var
+		my $cmdClass = $o->Var('cmd_class');
+		my $baseClass = $o->Var('base_class');
+		push (@ISA, $o->Var('cmd_class'),$o->Var('base_class'));	
 
-		my %flathash = (options=>
-			{%{$class->_alias_vars},%{$class->_alias_subs}, %{$class->_alias_flags}},
-			cmds=>$class->_alias_cmds);
+		#done to avoid warnings in ISA searches
+		eval "package $baseClass";
+		eval "package $cmdClass";
+		package Fry::Shell;
 
-		for my $k (sort keys %{$flathash{$hashname}}) {
-			print "$k\t",$flathash{$hashname}{$k},"\n";
-		}	
-	}	
-	sub debug ($) {
-		print "@_" if ($debug);
+		#load script level class into cmdClass
+		{ #change caller if this moves
+		no strict 'refs';
+		my $script_class = (caller(1))[0];
 
-	}	
-	sub load_libs {
-		my $class =shift;		
+		#to prevent recursive ISA loop ie placing shell_class in its own @ISA
+		if ($o->Var('shell_class') ne $script_class) {
+			push (@{"${cmdClass}::ISA"},$script_class);
+		}
+		}
+	}		
+	sub setCoreData ($\%) {
+		my ($o,$arg) = @_;
+		my @early_core_vars = (qw/core_config base_class cmd_class
+		plugin_config plugin_dump plugin_readline plugin_view default_lib
+		default_libs/);
 
-		for my $p (@{$class->libs}) {
+		$o->setVarObj(shell_class=>ref $o);
+		$o->loadLib(__PACKAGE__);
 
-			die  "Fry::Lib is the root path and should not be specified in libs" if ($p
-				=~ /Fry::Lib/i);
-			my $module = "Fry::Lib::$p";
+		#initialize error
+		eval {require Carp }; 
+		if (! $@) { $o->setVar(warnsub=>'Carp::carp',diesub=>'Carp::croak')}
 
-			#import module to call &_default_data
-			eval "require $module"; die $@ if $@;
+		#detect best plugins
+			eval { require Data::Dumper};
+			if (! $@ ) {$o->setVar(plugin_dump=>'Fry::Dump::DataDumper') }
 
-			#td: should change to hard coded method so loaded modules don't get
-			#initialized more than once
-			#load dependencies first
-			if ($module->can('_default_data') && exists ($module->_default_data->{depend})) {
-				for (@{$module->_default_data->{depend}}) {
-					my $fullname = "Fry::Lib::$_";
+			eval { require Term::ReadLine; require Term::ReadLine::Gnu};
+			if (! $@ ) {$o->setVar(plugin_readline=>'Fry::ReadLine::Gnu') }
 
-					#load if not in path
-					unless(grep(/^$fullname$/,@{$class."::ISA"}) > 0) {
-						$class->load_lib("$fullname");
-					}	
-				}	
+		#viaFile
+		$o->loadFile(delete $arg->{core_config} || $o->Var('core_config'));
+
+		my %corehash;
+		for my $core (@early_core_vars) {
+			$corehash{$core} = delete $arg->{$core} if (exists $arg->{$core})
+		}
+		$o->setVar(%corehash);
+	}
+	sub initCoreClasses ($\%) {
+		my ($o,$arg) = @_;
+		my %arg = %$arg;
+
+		for (qw/lib cmd var opt/) {
+			$o->{$_} = delete $arg{$_} if (exists $arg{$_})
+		}
+		for (qw/lib cmd var opt/) {
+			$o->_require($o->{$_});
+		}
+	}
+	##once subs
+	sub autoView ($@) {
+		my ($o,$cmd,@args) = @_;
+		#print scalar(@args),"\n";
+		#print "@_\n";
+		#defined autoview
+		if ($o->{cmd}->objExists($cmd) && exists $o->{cmd}->obj($cmd)->{ret}) {
+			#my $o->obj($cmd)->ret
+		}
+		#real autoview
+		else {
+		if (@args > 1) {
+			if (ref $args[0]) { $o->view($o->dumper(\@args)) }
+			else { $o->View->list(@args) }
+		}
+		elsif (@args == 1) {
+			if ($args[0] =~ /^[01]$/) { 
+				#print return codes
+			}	
+			elsif (ref $args[0] eq "HASH") {
+				$o->View->hash($args[0],$o->Var('view_options'));
 			}
-			$class->load_lib($module);
+			elsif (ref $args[0] eq "ARRAY") {
+				if (ref $args[0][0] eq "ARRAY") { 
+					$o->View->arrayOfArrays(@{$args[0]});
+				}
+				else { $o->View->list(@{$args[0]}) }
+			}
+			elsif (! ref $args[0]) { $o->view($args[0]) }
+			else { $o->view($o->dumper($args[0])) }
+		}
+		#should be warning
+		else { $o->view("No arguments returned") }
 		}
 	}
-	sub load_lib {
-		my ($class,$module) = @_;
-
-		#load_module($class->base_class,$module);
-		$class->load_module($module);
-
-		$class->load_class_data($module) if ($module->can('_default_data'));
-
-		#set config data
-		$class->read_lib_conf($module);
+	sub resetAll ($) {
+		my $o = shift;
+		$o->{opt}->resetOptions;
+		$o->setVar(fh=>'STDOUT');
+		$o->setVar(view_options=>'');
+		$o->resetFlags;
 	}
-	sub load_module {
-		my ($class,$module) = @_;
-		no strict 'refs';
+	sub resetFlags ($) {
+		my $o = shift;
+		$o->{flag}{skipcmd} = 0;
+		$o->{flag}{closefh}=0;
+	}
+	sub parseCmd ($$) {
+		my ($o,$input) = @_;
 
-		debug "loading module $module\n";
-		my $oldmodule = __PACKAGE__;
-		eval "package $class; require $module; package $oldmodule";
-		#eval "require $module";
-		die $@ if $@;
-		push(@{$class."::ISA"},$module);
-		debug("$class\'s ISA is ". join(',',@{$class."::ISA"})."\n");
+		my $parsesub = $o->Var('parsesub');
+		#if parsesub is alias
+		if (exists $o->Var('alias_parse')->{$parsesub} && $o->can($o->Var('alias_parse')->{$parsesub})) {
+			my $fullsub = $o->Var('alias_parse')->{$parsesub};
+			return $o->$fullsub($input);
+		}
+		elsif ($o->can($parsesub)) { return $o->$parsesub($input) }
+		else { $o->_warn("current parsesub $parsesub is invalid");
+			return $o->parseNormal($input);
+		}
+	}
+	sub setPrompt($) {
+		my $o = shift;
+		my %opt = $o->{opt}->findSetOptions;
+		my $prompt;
+
+		#options
+		if (%opt) {
+		$prompt .= "[ ";
+		#$prompt .= "opt: ";
+			while (my ($k,$v) = each %opt) {
+				$prompt .= "$k=$v ";
+			}
+			#$prompt .= ",";
+		$prompt .= "] ";
+		}
+
+		#flags
+		#$prompt .= "flag: ";
+		#for (keys %{$o->{flag}}) {
+		#$prompt .= "$_ " if ($o->{flag}{$_}) 
+		#}	
+		$prompt .= $o->Var('prompt');
+	}
+	sub getInput ($) {
+		my $o = shift;
+
+		my $prompt = $o->setPrompt;
+		my $input = $o->Rline->prompt($prompt);
+		if ($o->{flag}{multiline}) {
+			my $mline_char = $o->Var('mline_char');
+		       	while ($input !~ /$mline_char$/) {
+				$input .= " " . $o->Rline->prompt($prompt);
+			}
+			$input =~ s/$mline_char$//;
+			$o->parseMultiline(\$input);
+		}
+		return $input;
+	}
+	sub parseLine ($$) {
+		my ($o,$input) = @_;
+
+		my %opt = $o->parseOptions(\$input);
+
+		$o->{opt}->setOptions(%opt);
+		$o->{opt}->preParseCmd(%opt);
+
+		#parse args
+		return $o->parseCmd($input);
+	}
+	##parse subs
+	sub parseChunks($$) {
+		my ($o,$input) = @_;
+		my $pipe_char = $o->Var('pipe_char');
+		return split(/$pipe_char/,$input);
 	}	
-	sub load_class_data {
-		my ($class,$module) = @_;
-		#debug "load $module\'s class data\n";
+	sub parseMultiline($\$) {
+		my ($o,$input) = @_;
+		$$input =~ s/\n//g;	
+	}
+	sub parseOptions ($\$) {
+		my ($o,$input) = @_;
+		my %opt;
+		#split just in case input is scalar
+		my @args = split(/ /,$$input);
+		#to avoid uninit pattern match of args
+		no warnings;
+		#could've solved w/: push(@args,'')
 
-		#class data
-		$class->check_or_mk_global(%{$module->_default_data->{global}});
-		$class->add_to_hash(help_data=>$module->_default_data->{help});
+		while ($args[0] =~ /^-\w/) {
 
-		#aliases
-		#w: deref undef hash
-		if (exists $module->_default_data->{alias}) {
-			my %aliashash = %{$module->_default_data->{alias}};
-			while (my ($k,$v) = each %aliashash) {
-				$class->add_to_hash("_alias_$k",$v);
-			} 
+			#shift off '-'
+			my $option = substr($args[0],1) || "";
+
+			#variables and subs + flag = 0
+			if ($option =~ /=/) {
+				my ($key,$value);
+				($key,$value) = split(/=/,$option); $opt{$key} = $value;
+			}
+			#flags
+			else { $opt{$option} =1 }
+
+			shift @args;
 		}
+		$$input = "@args";
+		return %opt;
 	}
-	sub read_lib_conf {
-		my ($class,$module) =@_;
-		no strict 'refs';
+	sub parseNormal ($$) { return split(/ /,$_[1]) }	
+	sub parseEval ($$) { 
+		my ($o,$input) = @_;
+		my $splitter = $o->Var('eval_splitter');
+		my (@noneval,@eval,$cmd);	
 
-		my ($basename) = $module =~ /::(\w+)$/ || $module;
-		$class->read_file($class->_conf_dir.$basename);
-	}
-	sub read_file {
-		my ($class,$file) = @_;
-		return unless ( -e $file); 
-		our $conf='';
-
-		eval {require YAML}; 
-		#require file
-		if ($@) { do $file ; }
-		else { $conf = YAML::LoadFile($file) || {}; }
-
-		$class->set_or_mk_global(%$conf);
-
-		if ($debug) {
-			require Data::Dumper;
-			print "reading from file $file:\n";
-			print Data::Dumper::Dumper($conf),"\n";
+		if ($input =~ $splitter) {
+			my ($noneval,$eval) = split(/$splitter/,$input,2);
+			@noneval = $o->parseNormal($noneval);
+			@eval = "$eval";
 		}
+		else {
+			($cmd,@eval) = split(/ /,$input,2);
+			@noneval = $cmd;
+		}
+		my $text = '@eval';
+		eval "$text = (@eval)";
+		#print "n:@noneval\n";
+		#print "e:@eval\n";
+		return (@noneval,@eval);
 	}
-	sub parse_normal {
-		shift; return @_;
-	}
-	sub parse_menu {
+	sub parseMenu ($$) {
 		#d: creates @cmd_beg,@entry and @save from @args
-		my ($class,@args) = @_;
+		#my ($o,@args) = @_;
+		my $o  = shift;
+		my @args = split(/ /,shift());
 		my (@entry,@save,$i);
 		my @cmd_beg = shift (@args);
 		#td: fix uninitialized warning
@@ -417,101 +507,19 @@
 			}
 
 		#save chosen lines of @lines into @save
-		foreach (@entry) { @save = $class->parse_num($_,@{$class->lines})}
+		foreach (@entry) { @save = $o->parseNum($_,@{$o->Var('lines')})};
 
 		if (@args > 0) { return (@cmd_beg,@save,@args);	}
 		else {return (@cmd_beg,@save,@args); }
 	}
-	sub input {
-		my $class = shift;
-		my $prompt = ($class->_flag->{menu}) ? "[menu] ". $class->prompt : $class->prompt; 
-		#w/o rl
-		#print "\n",$class->prompt;
-		#my $entry = <STDIN>  or die "what the heck! no entry?";
-
-		print "\n";
-		my $entry = $term->readline($prompt) || die "term failed : $@";
-		$term->addhistory($entry);
-		chomp(my @args = split(/ /,$entry));
-		return @args;
-	}
-	sub check_for_options {
-		my $class = shift;
-		my ($optref,@command) = $class->parse_options(@_);
-
-		$class->setoptions($optref);
-
-		#f: renable to change tb+col,disabled due to some errors
-		#redefine db connection based on new param
-		#$class->setdb;
-
-		#split @command on whitespace to make up for an incorrectly made
-		#@command
-		return split(/ /,"@command");
-	}
-	sub parse_options {
-		#d: sets %opt as if it were a regular %o from commandline
-		my $class =shift;
-		my %opt;
-
-		#split just in case input is scalar
-		@_ = split(/ /,"@_");
-
-		while ($_[0] =~ /^-\w/) {
-
-			#shift off '-'
-			my $option = substr($_[0],1);
-
-			#variables and subs + flag = 0
-			if ($option =~ /=/) {
-				my ($key,$value) = split(/=/,$option); $opt{$key} = $value;
-			}
-			#flags
-			else { $opt{$option} =1 }
-
-			shift;
-		} 
-		return (\%opt,@_);
-	}
-	sub setoptions {
-		my ($class,$option_value) = @_;
-		my (%arg);
-		if ($debug) { print "option values are:\n",Data::Dumper::Dumper($option_value),"\n"};
-
-		while (my ($k,$v) = each %$option_value){
-			my $key_count=0;
-
-			if (exists $class->_alias_vars->{$k}) {
-			 	my $varname = $class->_alias_vars->{$k};
-				$class->$varname($v); 
-				$key_count++;
-			}
-			if (exists $class->_alias_flags->{$k}) {
-				my $flagname = $class->_alias_flags->{$k};
-				$class->_flag->{$flagname} = $v;
-				$key_count++;
-			}
-			if (exists $class->_alias_subs->{$k}) {
-				my $subname = $class->_alias_subs->{$k};
-				$class->$subname($v);
-				$key_count++;
-			}
-
-			if ($key_count > 1) { warn "option $k was set $key_count times" }
-				
-		}
-
-		#default rules equating the parse mode parse_menu with the flag 'm'
-		if ($class->_flag->{menu}) {$class->_parse_mode("m")}
-		$class->_flag->{menu} = 1 if ($class->_parse_mode eq "m");
-		$class->set_rules;
-	}
-	sub parse_num {
+	sub parseNum ($@){
 		my $class = shift;
 		my @save;my $e;my $count; 
 		my ($entry,@choose) = (@_);
 		#td: fix unitialized warning
 		no warnings;
+		$class->_die("Invalid argument, $entry , passed to &parse_num. Doesn't contain any numbers.")
+	       	if ($entry !~ /\d/);
 
 		my @entries = split(/,/,$entry);
 		foreach $e (@entries) {
@@ -526,409 +534,660 @@
 		}
 		return @save;
 	}
-	#redefinable
-	sub default_lib_actions {
-		my $class = shift;
-
-		#td: only calls function for given module,don't climb @ISA
-		for my $module (@{$class."::ISA"}) { 
-			$module->_init_lib if ($module->can('_init_lib'));
-
-		}	
+	##lib subs
+	sub getLibData ($$) {
+		my ($o,$module) = @_;
+		#done for &_default_data
+		#?: return undef if module require fails
+		$o->_require($module,{'warn'=>1});
+		return $module->_default_data if ($module->can('_default_data'))
 	}
-	sub set_rules { }
-	sub loop_default {
-		my $class = shift;
-		 print {$class->_fh} "Yo buddy, your command: '",join(' ',@_),"' isn't valid.\n"; 
+	sub loadLib ($$) {
+		#d: fullname
+		my ($o,$module) = @_;
+
+		my $dt = $o->getLibData($module);
+
+		#e: empty dt returned
+		return if (ref($dt) ne "HASH");
+
+		$o->loadDependencies($dt);
+
+		$o->setAllObj(%$dt);
+
+		{
+		no strict 'refs';
+		my $cmd_class = $o->Var('cmd_class');	
+		push(@{"$cmd_class\::ISA"},$module) unless ($module eq __PACKAGE__);
+		}
+		my ($varlist,$optlist,$cmdlist) = $o->readLibObj($dt); 
+
+
+		#extract other attributes
+		delete $dt->{vars}; delete $dt->{cmds}; delete $dt->{opts}; delete $dt->{lib};
+
+		$o->setLibObj ($module=>{cmds=>$cmdlist,opts=>$optlist,vars=>$varlist,%$dt});
+
+		$o->{var}->pushArray('loaded_libs','value',$module);
 	}
-	sub end_loop {
+	sub readLibObj ($$) {
+		my ($o,$dt) = @_;
+		my ($varlist,$optlist,$cmdlist) = ([],[],[]);
+			
+			$varlist = 	[keys %{$dt->{vars}}] if (exists $dt->{vars});
+			$optlist = 	[keys %{$dt->{opts}}] if (exists $dt->{opts});
+			$cmdlist = 	[keys %{$dt->{cmds}}] if (exists $dt->{cmds});
+
+		#add to Lib Obj directly via {lib}
+		if (exists $dt->{lib}) {
+			#push(@$varlist,@{$dt->{lib}{vars}}) if (exists $dt->{lib}{vars});
+			#push(@$optlist,@{$dt->{lib}{opts}}) if (exists $dt->{lib}{opts});
+			push(@$cmdlist,@{$dt->{lib}{cmds}}) if (exists $dt->{lib}{cmds});
+		}
+		return ($varlist,$optlist,$cmdlist);
+	}
+	sub loadDependencies ($$) {
+		my ($o,$dt) = @_;	
+		if (exists ($dt->{depend})) {
+			for my $basename (@{$dt->{depend}}) {
+
+				#load if not loaded
+				unless(grep(/^$basename$/,$o->List('lib')) > 0) {
+					$o->loadLib($o->{lib}->fullName($basename));
+				}
+			}
+		}
+	}
+#public shell interf to libs
+	sub saveArray ($@) {shift->setVar(lines=>[@_]) }
+	sub Var ($$) {return $_[0]->genValue('var',$_[1]) }
+	sub varMany ($@) { return shift->{var}->getMany('value',@_) }  
+	sub setVar ($%) { shift->{var}->setMany('value',@_) }
+	sub view ($@) { shift->View->view(@_); }
+	sub dumper ($@) { shift->Dump->dump(@_); }
+	#sub libList ($) {$_[0]->List('lib')}	
+	sub List ($$) {$_[0]->{$_[1]}->listIds }
+	sub listAll ($$) { $_[0]->{$_[1]}->listAliasAndIds }
+
+	##obj + class methods
+	sub Flag ($$){
+		my $o = (ref $_[0]) ? $_[0] : $_[0]->_obj;
+		return $o->{flag}{$_[1]} ;
+	}
+	sub setFlag ($$){
+		my $o = (ref $_[0]) ? $_[0] : $_[0]->_obj;
+		$o->{flag}{$_[1]} = $_[2];
+	}
+
+	sub lib ($) { return shift->{lib} } 
+	sub cmd ($) { return shift->{cmd} } 
+	sub var ($) { return shift->{var} } 
+	sub opt ($) { return shift->{opt} } 
+	##plugins
+	#?: could have 'em return $o as first arg
+	sub Dump ($) { return shift->Var('plugin_dump') }
+	sub View ($) { return $_[0]->Var('plugin_view') }
+	sub Rline ($) { return shift->Var('plugin_readline') }
+	sub Config ($) { return shift->Var('plugin_config') }
+#shell macros
+	sub unloadGeneral ($$@) {shift->{shift()}->unloadObj(@_)}
+	sub genValue ($$$) { return $_[0]->{$_[1]}->get($_[2],'value') }
+
+	sub findCmdAlias ($$) { $_[0]->{cmd}->anyAlias($_[1]) }
+#redefinable methods
+	sub loopDefault ($@) {
+		my $o = shift;
+		no warnings;	
+		#my @arg = ("@_" !~ /^\s*$/) ? @_ : '';
+		#print "blah\n" if ($_[0] eq '' && @_ == 1);
+		#td: uninitialized warning, can't figure out a defined/nondefined argument
+		 $o->view("Yo buddy, your command: '",join(' ',@_),"' isn't valid.\n"); 
+	}
+	sub preLoop ($) {}	
+	sub postLoop ($) {}	
+#later
+	sub logback {
+		#d:later
+		my %p = @_;
+		my %loglevel = (qw/debug 0 info 1 notice 2 warning 3 error 4 critical 5 alert 6 emergency 7/);
+		if ($loglevel{$p{level}} <= -1) {
+			return $p{message}
+		}
+		else { return ""}
 	}
 1;
 
-__END__	
-
 =head1 NAME
 
-Fry::Shell - Create commandline application with plugin libraries.
+Fry::Shell - Flexible shell framework which encourages using loadable libraries of functions.
 
-=head1 Basic Example
+=head1 SYNOPSIS
+
+	From the commandline: perl -MFry::Shell -eshell
+
+	OR
+
+	In a script:
 
 	package MyShell;
-	use base 'Fry::Shell';
+	use 'Fry::Shell';
+
+	#subs
+	sub evalIt {
+		my $o = shift;
+		my $code = ($o->Flag('strict')) ? 'use strict;' : '';
+		$code .= "@_";
+		eval "$code";
+	}
+	sub listStations {
+		my $o = shift;
+		my @stations = ( {name=>'high energy trance/techno',ip=>'http://64.236.34.196:80/stream/1003'},
+			{name=>'macondo salsa',ip=>'http://165.132.105.108:8000'},
+			{name=>'new age',ip=>'http://64.236.34.67:80/stream/2004'},
+		);
+		$o->saveArray(map{$_->{ip}} @stations);
+		return map {$_->{name}} @stations;
+	}
 
 	#set shell prompt
 	my $prompt = "Clever prompt: ";
 
-	#this hash maps aliases to shell commands which call class methods
-	my %alias = (qw/e echo/);
-
-	MyShell->sh_init(prompt=>$prompt,alias_cmds=>\%alias);
+	#initialize shell and load a command and an option 
+	my $sh = Fry::Shell->new(prompt=>$prompt,
+		load_obj=>{cmds=>{listStations=>{a=>'lS'}},opts=>{strict=>{type=>'flag',a=>'n',default=>0}} });
 
 	#begin shell loop
-	MyShell->main_loop(@ARGV);
+	$sh->shell(@ARGV);
 
-	#function definitions 
-	sub echo {
-		my $class = shift;
-		print "Nah! @_\n";
-	}
+	####end of example, start of other possible methods 
+
+	#run shell once
+	$sh->once(@ARGV);
+
+	#Methods which add to shell's functionality
+
+		$sh->setAllObj(%all);
+		$sh->setLibObj(%libs);
+		$sh->setOptObj(%opts);
+		$sh->setCmdObj(%cmds);
+		$sh->setVarObj(%vars);
+
+		#only loads library
+		$sh->loadLibs(@modules);
+		#loads library and runs each library's &_initLib 
+		$sh->initLibs(@modules);
+
+		$sh->loadFile($file);
+
+	#Shell API
+
+		#retrieve shell component objects by id
+		my $opt1 = $sh->optObj($opt);
+		my $cmd1 = $sh->cmdObj($cmd);
+		my $lib1 = $sh->libObj($lib);
+		my $var1 = $sh->varObj($var);
+
+		$sh->runCmd($cmd);
 
 =head1 VERSION	
 
-This document describes version 0.09.
+This document describes version 0.11.
+
+=head1 NOTE
+
+Due to major design changes, this version is incompatible with the
+previous. This means the current Fry::Lib::CDBI libraries are incompatible
+(doh!).  Although this code is decently tested and is apparently unbuggy, I
+consider it alpha until a few design issues have been solved.  I will try to
+keep the public methods (shown above) compatible with future releases.
+
+Oh yeah, some abbreviations I use often in this module, especially in naming
+subroutines:
+cmd- command, lib- library,opt- option,var-variable, gen- general, attr- attribute .
 
 =head1 DESCRIPTION 
 
-Fry::Shell is a simple and flexible way of creating a commandline application for a group of
-functions. Unlike other light-weight commandline applications (or shells), this module supports
-auto loading libraries of functions and thus encourages creating shells tailored to a module.
+Fry::Shell is a simple and flexible way of creating an application for a group
+of functions (a shell). Unlike other light-weight shells, this module
+facilitates (un)loading libraries of functions and thus encourages creating
+shells tailored to several modules. Although the shell is currently only
+viewable at the commandline, the framework is flexible enough to support other
+views (especially a web one :). This module is mainly serving(will serve) as
+the model in an MVC framework.
 
-The module's simplicity is in the set up.  First inherit this module's functions
-with' use base'. Then call two methods, &sh_init to customize
-the application and either &main_loop (for a shell app) or &once (for a
-command app) to start it.
+From a user perspective it helps to know that a shell session consists of mainly four components:
+libraries (lib), commands (cmd), options (opt) and variables(var). Commands and options are the same
+as in any shell environment: a command mapping to a function and an option changing the behavior of
+a command ie changing variables within it or calling functions before the command. Variables
+store all the configurable data, including data relating to these commands and options. Libraries
+are containers for a related group of these components.
 
-The flexible aspect comes from all internal and user-defined functions being class methods and
-global data being accessors. This means that it is quite easy to subclass and redefine the behavior
-and data of the shell.  Also it is possible to define your own parsing mode simply by setting an
-option at the commandline (ie '-p=a $command').
+=head2 FEATURES
 
-=head1 Setup
+Here's a quick rundown of Fry::Shell's features:
 
-There are two types of applications you can define, command and shell. A command application is run at the
-normal shell prompt once and exits. To set one up you could do:
+	- Subclassable: almost all functions are defined as class methods making this module easily subclassable
+	- Loading/unloading shell components at runtime.
+	- Flexible framework for using shell features via plugins.	 
+		You can even set up a bare minimum shell needing no external modules! Currently
+		plugins exist for dumping data,readline support,reading shell configurations and
+		viewing shell output. 
+	- Commands and options can be aliased for minimal typing at the commandline.
+	- Commands can have help and usage defined. 
+	- Commands can have user-defined argument types. 
+		One defines argument types by subroutines or tests that they should pass.
+		These tests are then applied to a command's defined argument(s).
+		With defined argument types, one can also define autocompletion
+		routines for a command's arguments.
+	- Options can modify variables.
+		Since variables exist for almost every aspect of the shell, options
+		can change many core shell functions. A handy example is 'parsesub'
+		which names the current parse subroutine for the current line.
+		Changing this var would change how the input after the options is
+		parsed.
+	- Options can have different behaviors defined including the ability to invoke
+		subroutines when called or to maintain a value for a specified amount of iterations. 
+	- Default options include 'menu' which numbers output and allows the next command to
+	reference them by number.
+	- Page output with preferred pager.
+	- Multiline mode.
+	- Comes with a decent default library,Fry::Lib::Default, to dump,list or
+		unload any shell component, run system commands,evaluate perl statements
+		and execute methods of autoloaded libraries.
 
-	__PACKAGE__->sh_init(prompt=>$prompt,alias_cmds=>\%alias);
-	__PACKAGE__->once(@ARGV);
+=head1 Introduction
 
-A shell application creates its own shell environment and runs until explicitly exited.
-Usually, you combine this with a command application and do:
+=head2 Setup
 
-	__PACKAGE__->sh_init(prompt=>$prompt,alias_cmds=>\%alias);
-	__PACKAGE__->main_loop(@ARGV);
+The two main ways to start a shell session are via &shell and &once.
+The advantage of &once, at least in a commandline environment, is that it is
+easily shell scriptable since it is noninteractive. To set up &once :
 
-=head1 Using the Shell	
+	my $sh = Fry::Shell->new(prompt=>$prompt);
+	$sh->once(@ARGV);
 
-Assuming you've set up the basic example above, what can you do in your shell?
-By default you have nine shell commands always available: three which perform
-action on global data (&set_global_data,&print_global_data,&list_global_data),
-four which provide help (&help_usage, &help_description,&list_options,
-&list_commands), &perl_exe which executes given perl code and &quit.
-See handyshell.pl under samples directory for a tutorial on using them.
+To set up &shell:
 
-To create your own shell commands you should define methods in your script's
-namespace. Since shell functions are called as methods, the first argument must
-always be shifted as shown above. For class methods, the first argument is the
-class as shown above.  The remainder and perhaps a good part of shell commands
-you'll use will come from libraries.
+	my $sh = Fry::Shell->new(prompt=>$prompt);
+	$sh->shell(@ARGV);
 
-=head1 Public Class Methods
+=head2 SYNOPSIS Explained
 
-=over 4	
+What can you do in your shell? Run any subroutines which you define as commands (or even better
+commands defined by libraries). Even if your subroutines are not defined
+they can still be executed by typing the subroutine's name. In SYNOPSIS above, &evalIt is such a
+subroutine.
 
-=item B<sh_init()>
+Looking at &evalIt's innards, you see that the first argument is $o which is the shell
+object.  This is due to most commands being called as an object method. You also see 
+' $o->Flag("strict") ' which is a boolean flag to prepend a 'use strict' to the evaluated code. Since
+we defined an option as type flag when initializing the shell, we change the flag's value when we
+flip the option from the commandline (ie '-n evalIt $ref = "woah"; $foo = "ref"; print $$foo').
 
-=item B<sh_init(%parameters)>
+&listStations is a cool example of the menu option. You'll need to have a music player that can
+be executed via a system call, most likely a *nix environment, and that can play shoutcast radio stations (ie xmms).
+Without any options, this command simply prints a list of stations. If you use the menu option (ie
+'-m lS'), the next input line is parsed differently with numbers being substituted with
+corresponding positions from the variable lines. For example,'! xmms 2', would call xmms with the 2nd radio
+station in the variable lines. The &saveArray call is what passed the list of ip's to the variable lines.
 
-	__PACKAGE__->sh_init(prompt=>$prompt,alias_cmds=>\%alias_cmds);
+=head2 Using Options
 
-Note: all the parameters are optional.
-The default values for these paramters is in 
-&_default_data. Here they are:
+Options come before commands. How they are parsed depends on &parseOptions.
+By default, an option begins with a '-'. You can specify an option's alias or full name. To set
+an option's value put a '=' and the option value after it ie '-menu=1'.
+If no '=' comes after an option name then the option is treated as a flag and set to 1 (ie the
+previous example can be written '-menu').
 
-=over 4
+=head1 LIBRARIES
 
-=item B<prompt($)>: shell prompt for a shell application
+=head2 Using Libraries
 
-=item B<alias_cmds(\%)>: hashref of aliases to shell commands 
+The SYNOPSIS section contains a good example of a shell with a couple of functions. But what happens
+if you expand on this and develop several more radio-playing commands and other eval-based commands?
+You would probably break them up into separate shells as the shell gets crowded with too many
+commands you don't need for a given session. It's at this point that a library comes in handy.
 
-Ie for an entry such as p=>print, typing 'p hello' in the shell would execute
-__PACKAGE__->print('hello')
+A library is simply a group of related subroutines. At its simplest you can place your functions in
+a library, load the library and be able to execute any of the functions. You can load library(ies)
+when initializing a shell via the libs attribute :
 
-=item The next three parameters define aliases for options specified at the
-commandline. See the OPTIONS section below for more detail. 
+	Fry::Shell->new(libs=>[qw/:Lib1,Fry::Lib::Lib2/]);
 
-=item B<alias_vars(\%)>: maps letters to global variables
+or after initialization via &initLibs:
 
-	%alias_vars=(qw/t tb d db D dbname/);
-	t maps to $class->table
+	$sh->initLibs([qw/:Lib1, Fry::Lib::Lib2/]);
 
-=item B<alias_flags(\%)>: maps an option to the global hashref $class->_flag, used for
-flipping booleans
+Notice the shorthand ':Lib1' in both examples. This abbrevations means
+Fry::Lib::Lib1 and is valid notation for &initLibs and &loadLibs.
 
-=item B<alias_subs(\%)>: maps option to subref, an option's value is passed to the
-sub, usually used for setting variables
+Even if no libraries are specified, a shell loads the lib Fry::Lib::Default. Its functions enable
+you to view and change the core shell components.
 
+=head2 Writing Libraries
 
-=item B<option_value(\%)>: mapping the option letters to their commandline values,used
-only for a command application
+Libraries are usually placed under Fry::Lib. Other namespaces will work for now but are only
+recommended if you can't get under the Fry::Lib namespace .  To use most shell features, you need to
+define shell components in your library. Currently this is only done via &_default_data. However,
+since it only returns a hashref, there are many possible ways of storing configuration data ie
+databases,xml,dbm, FreezeThaw ...  
 
-	%option_value = (qw/b mozilla e vim/);
+A good library example is Fry::Lib::Default.
 
-=item B<alias_parse(\%)>: hashref mapping a parse letter to a parse function, you
-define new parse modes by adding an entry here.  
+=head3 SETUP
 
-	%alias_parse = (qw/q quickmode/);
+=head4 &_default_data
 
-=item B<conf_file($)>: specifies a global configuration file
+&_default_data returns a hashref that can set library attributes
+and create any shell component. It consists of any of the following keys: 
 
-This file contains a hashref of parameters that are read into the
-accessor &_conf . To specify a list of libraries to autoload,
-define them with the libs key.  
+	depend(\@): lists other libraries that this library depends on.
+
+	Dependent modules and their configurations are required and read before the current library.
+	This parameter can also take the abbrevation of &initLibs of a beginning colon meaning 'Fry::Lib::'.
+
+	cmds(\%): Defines commands with each id pointing to a defined object. A command object's attributes are explained in Fry::Cmd.
+
+		cmds=>{cmd1=>\%obj1,cmd2=>\%obj2}
+
+	opts(\%): Defines options with each id pointing to a defined object. An option object's attributes are explained in Fry::Opt.
+	vars(\%): Defines variables with each id pointing to a defined object. A variable object's attributes are explained in Fry::Var.
+	lib(\%): Defines pseudo-components, in development. Can take following keys:  
+		cmds(\@): Used with &objectAct to treat an autoloaded module's methods as library commands.
 		
-=item B<load_libs($)>
+=head4 &_initLib
 
-=item B<load_libs([@])>: loads libraries in addition to ones specified in the global config
-	file, the arguments are the module's package name minus "Fry::Lib"
+	This is an optional subroutine that initializes anything within the library after loading
+its configuration data. Its explicitly run via &Fry::Lib::runLibInits.
 
-	For example, to load the library module 'Fry::Lib::Handy' you
-	pass 'Handy'.
+=head3 Writing Library Functions
 
-=item B<help(\%)>: defines help for shell functions to be used by &help_usage
-and &help_description
+Since libraries functions are treated as shell object methods, the first
+argument in any command-defined function is a shell object. With a shell
+object you have many of its features available to you. The section Public Library
+Interface covers all methods available to a library. I'll briefly emphasize
+the essential ones: dumper,Flag,setFlag,Var,view,_die and _warn. 
 
-	help=>{ 
-		help_usage=>{d=>'Prints usage of function(s)',u=>'[@commands]'},
-	}	
+Since Fry::Shell is written with a flexible view in mind, it is recommended to
+pass all your output to &view.  By doing this, your functions' output can be
+displayed by any plugin under Fry::View.  However, if you want to write
+libraries that are as portable as possible, you'll avoid embedding view
+methods. So how will you display your command's output?  Return the data
+structure you want displayed in your functions. See Fry::Lib::Default for
+examples. &autoView then displays the command's output.  &autoView supports
+the following data structures: array, arrayref,hashref and scalar. Anything
+more complicated should be dumped.
 
-The keys of this hashref are the names of the functions. Each function takes
-a hashref with keys 'd' and 'u' for description and usage help respectively. 
-Usage is given as perl regular expressions by default. For readibility, optional
-chunks can be wrapped in '< >'
+For error throwing I recommend using &_die and &_warn, which are configurable
+via variables diesub and warnsub. For now they are mainly a means of
+centralizing errors. For retrieving variables, use &Var for one variable and
+&varMany for many. For dumping data structures,I recommend using &dumper which
+calls a dump plugin's main method. Being a plugin, it provides multiple ways
+to dump a data structure. The final methods that should be emphasized are
+&Flag and &setFlag which retrieve and set flag values.
 
-=item B<global(\%)>: sets given global data accessors,useful when defining
-script level data for a library 
+A dilemma you mave come across when developing more complex libraries is
+portability. Perhaps you want to reuse a library's functions in other
+applications. Your library will fail in other applications that don't define
+shell object methods. The obvious solution is minimizing the use of shell
+object methods throughout your code. Although some methods are hard to work
+around (ie &_warn and &_die which you either use or don't), you can work
+around the variable and flag-related methods. Define global hashes for
+Fry::Shell flags and variables. Then write a wrapper around the command
+setting the needed variables and flags:
 
-	global=>{db=>'postgres',dbname=>'template1'}
+	my (%flag,%var);
 
-=back	
+	sub commandMammoth {
+		my $o = shift; 
 
-=item B<main_loop()>
+		#set variables
+		for my $v (qw/Pi fodder goatcheese/) {
+			$var{$v} = $o->Var($v)
+		}
+		#set flags
+		for my $f (qw/complex simple fakeit/) {
+			$flag{$f} = $o->Flag($f)
+		}
 
-=item B< main_loop(@input)>
-
-This method starts the shell's main loop. If you pass it an @ than you're also
-enabling it as a command application.
-
-	__PACKAGE__->main_loop(@ARGV);
-
-=item B<once()>
-
-=item B<once(@input)>
-
-This runs through one iteration of the loop. It consists of three main
-actions: getting the input,parsing it and executing it. If an argument
-isn't given then it will prompt for one.
-
-	__PACKAGE__->once(@ARGV);
-
-=back	
-
-=head1 Default Shell Functiosn
-
-These are default shell functions which deal mainly with the shell and its configurations.
-
-=over 4
-
-=item B<help_usage(@commands)>: Prints usage of shell function(s), if no argument given
-prints usage of all functions
-
-=item B<help_description(@commands)>: Prints brief description of function(s), if no argument
-given prints all descriptions 
-
-=item B<perl_exe($perl_code)>: Executes arguments as perl code with eval
-
-=item B<list_options()>: Lists loaded options and their aliases
-
-=item B<list_commands()>: Lists loaded commands and their aliases
-
-=item B<set_global_data($accessor $data_structure)>: Set a global data accessor equal to any data structure since it is evaled
-
-=item B<print_global_data(@global_data)>: Print global data accessors and their values
-
-=item B<list_global_data()>: List global data accessors
-
-=back
-
-=head1 Class Methods to Redefine
-
-You can redefine these in your application's namespace.
-
-=over 4
-
-=item B<end_loop>: This subroutine executes at the end of every shell loop. Redefine it with
-	anything you want done at the end of a loop. A good place to set class
-	data to default values for every loop iteration.
-
-	sub end_loop {
-		my $class = shift;
-		$class->save($really_important_info);
+		#original command
+		#use %flag and %var in mammothAlgorithm
+		$o->mammothAlgorithm(@_);
 	}
 
-=item B<loop_default>: This subroutine executes if no valid command is given. By default this sub
-	returns an error message of invalid entry. It is passed	an array containg the command and
-	its arguments.
-		
-	sub loop_default {
-		my $class = shift;
-		print "Hey bub, don't be trying none of that $_[0] around here.\n";
+=head1 PLUGINS
+
+Fry::Shell plugins provide flexibility for often used shell features both in functionality and in
+module dependency. In making Fry::Shell as portable as possible,  the default plugins do not require
+any external modules. If Data::Dumper and Term::ReadLine::Gnu are detected,their plugins are
+autoupgraded. When a plugin is loaded it is required and then initialized via &setup. Plugins do not
+currently have their own shell components like libraries.  There are currently four plugins: View,
+ReadLine,Dump and Config.
+
+=head2 View
+
+View handles the view of the shell. Currently only a commandline view exists.  A view outputs to the
+filehandle specified by the var 'fh' and should have special output formats for an array and a hash.
+A view's methods can be accessed via the accessor View ie $o->View->list(@output).
+
+=head2 ReadLine
+
+ReadLine plugins are usually interfaces to Term::ReadLine::* modules. Its main method is &prompt
+which reads input and returns it. These plugins are still in a state of flux and will delve
+into run-time configurable autocompletions as well as command history logging.
+Fry::Shell comes with three of these plugins:
+
+	Fry::ReadLine::Default- only reads and returns, no features
+	Fry::ReadLine::Basic- basic interface to Term::ReadLine
+	Fry::ReadLine::Gnu- uses Term::ReadLine::Gnu and provides auto completion of
+		options,commands and a command's arguments (if defined).
+
+=head2 Dump 		
+
+Dump renders complicated data structures viewable. As there are at least a handful of dumper modules
+I thought it would be handy to offer this flexibility.  A dump's methods can be accessed via the
+accessor Dump ie $o->Dump->dump(@stuff).
+
+=head2 Config(uration)
+
+	Config plugins read configuration data (as if you didn't know). Currently only
+file configurations exist. Configurations are read when initializing the shell. There are two
+configurations,a core one and a global one. The core one is read after loading data in this module's
+&_default_data.  Part of the core data contains plugin classes so redefine them here. Since the core
+config is read before you can specify your preferred config plugin, it will always be read by
+Fry::Config::Default which requires a hashref named $conf. The global config is the place to
+redefine any shell components from loaded libraries. Loading a configuration is done via a plugin's
+&read.
+
+Configurations can also be loaded at the script level via &loadFile.
+
+	$sh->loadFile('/home/dope/.mylovelyconfig');
+
+=head3 Config Data Structure Format
+
+	A configuration defines a hashref similar to a library's &_default_data, no suprise since
+they're both defining shell components. It consists of any of the following keys:
+
+	cmds(\%): Defines commands with each id pointing to a defined object. A command object's attributes are explained in Fry::Cmd.
+	opts(\%): Defines options with each id pointing to a defined object. An option object's attributes are explained in Fry::Opt.
+	vars(\%): Defines variables with each id pointing to a defined object. A variable object's attributes are explained in Fry::Var.
+
+=head3 Configuring Core Variables
+
+When configuring core shell components (defined in this module's &_default data),
+you'll usually modify variable values.  Here's a quick overview of core
+variables and what they do (note,variables take a scalar value unless
+indicated otherwise):
+
+	defaultlib: default library loaded instead of Fry::Lib::Default
+	base_class: name of class which inherits autoloaded classes
+	cmd_class: name of class which inherits loaded libraries
+	plugin_config: config plugin 
+	plugin_readline: readline plugin
+	plugin_dump: dump plugin
+	plugin_view: view plugin
+	defaultlibs(\@): default libraries to load
+	alias_parse(\%): mapping commandline aliases to parse subroutine names
+	parsesub: current parse subroutine
+	warnsub: subroutine called by &Fry::Error::_war
+	diesub: subroutine called by &Fry::Error::_die
+	fh: current filehandle for output
+	view_options(\%): contains options to be passed at
+	eval_splitter: used by &parseEval to delimit where normal parsing ends and where eval parsing begins
+	field_delimiter: delimits fields used by Fry::View::* modules
+	fh_file: used with fh_file option to specify filename
+	pager: name of preferred pager
+	mline_char: regular expression indicating end of a multiline command
+	pipe_char: regular expression used to delimit piping between command names on commandline
+	prompt: shell prompt
+	core_config: name of core config file
+	global_config:name of global config file
+	lines: used by the menu option
+	loaded_libs(\@): currently loaded libraries
+
+=head1 Miscellaneous	
+
+=head2 Loading Order of Shell Components
+
+When considering where and how to overwrite shell component values, it helps to understand in what
+order they are loaded. Here it is: config of Fry::Shell library, core config, config of all other libraries,
+global config,load_obj option of &new and options setting variable values.
+
+=head2 Useful Options
+
+Fry::Shell comes with a few handy options (defined in &_default_data): 
+
+	parsesub: sets the current parsing subroutine, handy when needing to pass a command a
+		complex data structure and want to use your own parsing syntax
+	menu: sets parsesub to parseMenu thus putting the user in a menu mode
+		where each output line is aliased to a number for the following
+		command, explained in SYNOPSIS Explained section
+	fh_file: sends command's output to specified file name
+	pager: sends command's output to preferred pager
+	autoview: flag which turns on/off autoview and a command's subroutine outputs for itself
+	skiparg: flag which turns on/off skipping command argument checking
+
+=head2 Defining Parsers
+
+You can define your own parse subroutines to parse the input after options. A parse subroutine
+receives its input as a string and returns the command and its arguments in an array.
+
+	sub parseMyWay {
+		my ($o,$input) = @_;
+		return (split(/ |,/$input))
 	}
-	
-=item B<set_rules>: This sub is called after commandline options are set but before
-	the shell command is executed. If you want to equate the setting of a
-	variable with a flag this would be the place. For example,if you had to
-	type -v='painfully_long_name' wouldn't it be nice to simply type '-V'?
 
-		sub set_rules {
-			my  $class = shift; 
-			if ($class->_flag->{menu}) {$class->_parse_mode("m")}
-			#$class->_flag->{menu} = 1 if ($class->_parse_mode eq "m");
-		}	
+Good examples of parse subroutines are any parse* methods. You can define your
+own parse subroutines by putting them in any library to be loaded. To alias
+the subroutine, add an entry to the variable alias_parse. I would recommend doing this in
+a global config file. Don't forget to also place the defaults key-value pairs of alias_parse in the
+redefinition.
 
-This example is the default rules hardcoded before &set_rules is
-called. This rule associates sets the current parsing mode to 'm' if the flag
-menu is set. Thus on the commandline instead of setting the
-current parse mode with '-p=m' you can type an even shorter '-m' to
-set the menu flag. This example only saves you two typed letters (But
-it is an option I use often). 
+=head2 Multiline Mode
 
-=back
+To start a multiline session you flip the multiline option (ie '-M').
+The multiline mode lasts as long as it doesn't encounter the variable
+mline_char, default being ';'. Multiple lines of input are joined by a whitespace.
 
-=head1 Commandline Parsing and Parsing Modes
+=head2 Using Autoloaded Libraries
 
-By default, a commandline is parsed as follows:
+This is a sweeet feature implented via &classAct and &objectAct that allow
+you to load a normal module and act on its object and/or class methods.
+See Fry::Lib::Default for details.
 
-1. The whole commandline is passed to &parse_options which returns a
-hashref mapping options to values and an array of the  rest of the commandline.
+=head1 Class Methods
 
-2.This hashref is used by &setoptions to set the options.
+Public class methods have been divided into script and library interface
+categories. These categories are only recommendations and a shell object's
+script method could be called in a library and vice versa. A method's
+arguments are described via data structure symbols @,$,% and a descriptive
+name. Optional arguments are described in perl regular expression format.
 
-3. The next white-space separated word is a method name or an alias of
-one.
+=head2 Public Script Interface
 
-4. Now this is where parse modes come into play. The rest of the commandline,usually arguments to
-the above method, is parsed by an entry in the global hash table, &_alias_parse. The current parse
-mode's key or alias is saved in the &_parse_mode accessor. By default it's value is 'n' which maps
-to &parse_normal. &parse_normal does nothing but return what it's given.
+Public methods that are recommended for usage in a script
+which runs a shell session.
 
-The only other default parsing mode available is &parse_menu.
-&parse_menu substitutes any numbers of the form /\d+|\d+-\d+/ ie
-4,5-9 with elements from the &lines accessor (with the first element
-being one). A good way of using this is to print a
-a numbered menu of items to feed the next command
-and save the items to &lines. On the next loop iteration the numbers
-will be replaced with the chosen items and the transformed arguments
-will be fed to the current shell command.
+	new(%options): Creates a shell object and creates its shell components ie load
+		libraries and initialize core data. It can take any variable
+		name and value pairs as well as the following keys:
+		
+			load_obj(\%): Creates shell components via &setAllObj,see it for data
+				structure format 
+			libs(\@): Loads libraries after having loaded all libraries specified in
+				configs.
+			lib($): Uses a lib class other than Fry::Lib.
+			cmd($): Uses a cmd class other than Fry::Cmd.
+			opt($): Uses an opt class other than Fry::Opt.
+			var($): Uses a var class other than Fry::Var.
+			core_config
 
-To make your own parse mode: 
+		Note: For further description of core variables look at the above section
+		Configure Core Variables. You can pass a core variable as an option just like any
+		other variable.
 
-- define an entry in the &_alias_parse global hashref
+	shell(@input?): Starts the shell's main loop. Optional argument is input to first loop iteration.
+	once(@input?): One iteration of loop. If optional argument isn't given, prompts for input.
+	runCmd(@args): Executes given command and arguments.
+	initLibs(@libs): Loads libraries and calls library initialization subroutines.
+	loadLibs(@libs): Only loads libraries.
+	loadFile($file): Reads config file via config plugin.
+	loadPlugins(@vars): Loads plugins by their variable name ie plugin_config.
+	setVarObj(%id_to_obj): Creates Variable objects, expected hash maps ids of
+		objects to objects.
+	setOptObj(%id_to_obj): Creates Option objects in same way as &setVarObj.
+	setCmdObj(%id_to_obj): Creates Command objects in same way as &setVarObj.
+	setLibObj(%id_to_obj): Creates Library objects in same way as &setVarObj.
+	setAllObj(%id_to_obj): Creates objects for a library's shell components with the following keys:
+		cmds(\%): passes argument to &setCmdObj
+		opts(\%): passes argument to &setOptObj 
+		vars(\%): passes argument to &setVarObj
 
-- the parse function should receive the whole commandline 
-as input and return the arguments to be passed to shell function
+=head2 Public Library Interface
 
-See handyshell.pl under the samples directory to see &parse_menu in action.
+Public methods that are recommended for usage in a library.
 
-=head1 OPTIONS
+	saveArray(@args): Sets the lines variable for use with the menu option.
+	Var($var): Returns a variable value.
+	varMany(@var): Returns several variable values.
+	setVar(%var_to_value): Sets variable values with hash mapping variables to values.
+	List($shell_component): Returns list of object ids for given shell component
+		class; valid arguments are lib,var,opt,cmd.
+	listAll($shell_component): Returns list of object ids and their aliases for given shell component
+		class.
+	view(@arg): Calls the view plugin's &view. This is the recommended subroutine
+		to print out most data.
+	dumper(@arg): Calls the dump plugin's &dump for dumping a data structure.
+		Note that dumping doesn't output the data structure but returns a string
+		dump. To print out a dump you could do this:
+		$o->view($o->dumper($gargantuanDataStructure)).
+	Flag($flag): Returns a flag's value.
+	setFlag($flag,$value): Sets a flag's value, which should be 1 or 0.
 
-An option maps to the same variable,flag or function for both a command and shell
-application. The difference between the two is in the option parsing.
+	Accessors for shell component classes:
+		
+		lib: library class
+		cmd: command class
+		var: variable class
+		opt: option class
 
-For a command application, parsing is usually handled by a Getopt module.
-I'd recommend the following:
+	Accessors for plugin classes: Returns a plugins' class name. Used to call a plugins' methods ie
+	'$o->View->list(@deals);'
 
-	use Getopt::Long;
-	Getopt::Long::Configure ("bundling");
-	GetOptions(\%o,'t|table=s','d|db=s','D|dbname=s','O|opts=s');
+		Dump: dump plugin
+		View: view plugin
+		Rline: readline plugin
+		Config: config plugin
 
-Note that %o contains a hash of the options' values which you can pass as the
-option_value parameter to &sh_init.
+=head2 Class Methods to Redefine
 
-For a shell application, parsing is handled by &parse_options which recognizes anything starting with a '-'
-as an option. To set a flag you simply give the option ie '-m'. To set a variable or
-function, put a '=' and option value after the option ie'-b=mozilla'.
+Methods recommended to redefine when creating your own Fry::Shell subclass.
 
-=head1 Global Data
-
-All of Fry::Shell's class data is handled via accessors/mutators. It is
-encouraged for most plugins and libraries to do the same. These accessors hold scalar values and thus you can
-put a reference to any data type in them. For example:
-
-	$uglysheep = $class->somearray->[1];
-	#This accesses the 2nd element of the arrayref that somearray() contains.
-
-See L<Class::Data::Global> for more information on manipulating class data.
-
-To understand in what order class data is loaded into the module look at
-&sh_init. Here is an overview of the stages:
-
-	1. Fry::Shell's class data defaults are loaded with &load_class_data
-
-	2. The user's class data defaults are loaded from &_conf_file
-
-	3. Library modules' default class data are loaded with &load_class_data,
-		followed by loading a user's custom config file for a library with &read_lib_conf.
-		If a module has dependent library the dependency's data is loaded first. 
-
-	4. Class data from the script is loaded using &add_to_hash.
-
-	5. Class data from commandline options is loaded using &setoptions. 
-
-=head1 Configuration files
-
-A config file is one big hashref containing variable name and value pairs.
-By default the global config file is serialized in YAML. If YAML can't be
-loaded then it will resort to requiring the hashref $conf from the config
-file.
-
-=head1 Writing Libraries
-	
-Fry::Shell encourages creating and sharing libraries of (hopefully useful) functions.
-By having Fry::Shell handle basic shelling, shells around often-used modules
-could grow more easily. 
-
-Only your functions are needed for a library to work. However, if you want to
-pass on any customization of your shell then you'll define &_default_data.
-&_default_data returns a hash with any of the following keys:
-
-=over 4
-
-=item B<depend([@])>: lists other libraries that this library depends on.
-
-Dependent modules and its class data are loaded before the library module. 
-Naturally you could load any dependent modules with 'use' or 'use
-base'. Loading it via this key changes the @ISA hierarachy from the
-application's perspective, placing base modules before dependent
-modules.
-
-=item B<global(\%)>: defines global class data
-
-global class data is visible to all modules in the shell
-
-=item B<alias(\%)>: this specifies aliases you use with options, shell functions
-	and parse modes ,you can have ony of the following as keys:
-	
-	cmds(\%): adds to the accessor  _alias_cmds
-	subs(\%): " "  _alias_subs 
-	vars(\%): " " _alias_vars
-	flags(\%): " " _alias_flags
-	parse(\%): " " _alias_parse
-
-=item B<help(\%)>: defines help for shell functions to be used by &help_usage
-and &help_description
-
-Has the same structure as the help parameter for &sh_init. See above in the Public
-Class Methods section.
-
-=back
-
-=head1 Suggested Modules
-
-A few functions depend on external modules. These modules are optional and their respective
-functions fail safely:
-	
-	&print_global_data: Data::Dumper	
-	&read_conf: YAML
+	preLoop(): This subroutine executes at the beginning of every shell loop.
+	postLoop(): This subroutine executes at the end of every shell loop.
+	loopDefault($cmd,@arg): This subroutine executes if no valid command is given. By default this sub
+		returns an error message of an invalid entry. It is passed an array containg the command and
+		its arguments.
 
 =head1 See Also
 	
@@ -939,19 +1198,43 @@ L<Term::GDBUI>.
 
 For big-mama shells look at L<Zoidberg> and L<PSh>.
 
-See the samples directory for sample scripts.
+=head1 TO DO
 
-=head1 ToDo	
+There are a jazillion things I would like to do with this module.
+Top priorities are writing a Devel tutorial to better explain Fry::Shell's innards
+and to rewrite the Class::DBI libraries so that they are compatible with this version.
+Then ...
 
-	Oh so much:
-		- global config file: allow it to be a perl data structure,
-		support setting global data
-		- Redesign to allow plugin architecture for loading data, readline, storing
-		data, printing data. By making any external modules plugins, one can
-		have a minimal shell and install external modules as desired.
-		- support libraries which have object methods, currently only class methods supported  
-		- autocompletion support
-		- better library plugin support
+	priority 1
+		autoload modules
+			develop framework around &objectAct
+			be able to load:
+				OO methods ie List::Compare
+				class methods ie Class::DBI 
+				functions ie Date::Manip
+		view plugin: cgi view 
+		develop configuration format for autoloaded modules and plugins
+			menu or option-based choosing of a class's global settings
+			menu or option-based choosing of a module's functions
+		error framework
+		readline
+			edit cmd in file
+			save history between sessions
+			save cmds to file to edit + reexecute
+				save currently done cmds,quit and redo w/ a command
+			map commands to keys
+			cmdline options in how + what to autocomplete
+	priority 2	
+		make parser object to be used by option parsesub
+		opt
+			autoset w/ cmds
+			check that var exists for opt of type var
+		cmd
+			define pre+post subs
+				autoaliasing arguments
+			define a return attribute- this could allow autocompleting
+				commands that can be piped another command's input
+			autousage from arg
 
 =head1 AUTHOR
 

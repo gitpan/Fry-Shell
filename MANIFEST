@@ -1,8 +1,31 @@
 Makefile.PL
 t/shell.t
-lib/Fry/Shell.pm
+t/core.t
+t/list.t
+t/testlib/shell.conf
+t/testlib/shell.yaml
+t/testlib/Fry/Lib/SampleLib.pm
+t/testlib/Fry/Lib/EmptyLib.pm
 MANIFEST
-samples/handyshell.pl
 README
-META.yml                                 Module meta-data (added by MakeMaker)
 Changes
+lib/Fry/Lib/Default.pm
+lib/Fry/Lib/DBI.pm
+lib/Fry/Lib/Inspector.pm
+lib/Fry/Config/Default.pm
+lib/Fry/Config/YAML.pm
+lib/Fry/ReadLine/Default.pm
+lib/Fry/ReadLine/Gnu.pm
+lib/Fry/View/CLI.pm
+lib/Fry/Shell.pm
+lib/Fry/Base.pm
+lib/Fry/Error.pm
+lib/Fry/Lib.pm
+lib/Fry/List.pm
+lib/Fry/Opt.pm
+lib/Fry/Cmd.pm
+lib/Fry/Var.pm
+lib/Fry/Dump/Default.pm
+lib/Fry/Dump/DataDumper.pm
+lib/Fry/Dump/TreeDumper.pm
+META.yml                                 Module meta-data (added by MakeMaker)
