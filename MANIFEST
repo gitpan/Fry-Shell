@@ -1,0 +1,6 @@
+Makefile.PL
+t/shell.t
+lib/Fry/Shell.pm
+MANIFEST
+samples/handyshell.pl
+META.yml                                 Module meta-data (added by MakeMaker)
