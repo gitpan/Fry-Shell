@@ -1,0 +1,11 @@
+0.09 Wed Jul 7 2004
+	-turned off debug (accidently left on), changed 'quit' logic to be more flexible, added support for requiring a
+	global file,warning clean
+0.08 Fri Jul 2 2004
+	- fixed Dumper to work for debug, made loading class data more flexible
+	  with &check_or_mk_global
+0.07 Thu Jul 8 2004	  
+	- added several more core shell functions: extensive help, printing and setting data,listing options and functions
+	- cleaner pod
+0.02 Thu Jun 17 2004
+	Initial	release

@@ -5,11 +5,11 @@
 	use warnings;
 	use base 'Class::Data::Global';
 	use Term::ReadLine;
-	our $VERSION = '0.08';
+	our $VERSION = '0.09';
 	our @ISA;
 	our ($term);
 	my $mcount =0;
-	my $debug = 1;
+	my $debug = 0;
 	eval { require Data::Dumper};
 	$Data::Dumper::Indent = 0;
 	$Data::Dumper::Purity = 1;
@@ -19,6 +19,7 @@
 		return {
 			global=>{
 				_conf_file=>$ENV{HOME}."/.shell.yaml",
+				_conf_dir=>$ENV{HOME}."/.shell/conf/",
 				_parse_mode=>'n',
 				_flag=>{},
 				_fh=>'STDOUT',
@@ -33,6 +34,7 @@
 				prompt=>'Lame-o-prompt',
 				lines=>[],
 				help_data=>{},
+				base_class=>'Fry::Shell::Base',
 			},
 			help=>{ 
 				help_usage=>{d=>'Prints usage of function(s)',u=>'<@commands>'},
@@ -69,11 +71,10 @@
 			delete $config{conf_file}; 
 		}	
 		#loads shellwide config file
-		$class->read_conf;
+		$class->read_file($class->_conf_file);
 
 		#process load_libs option
-		#create _conf if not found
-		$class->check_or_mk_global(_conf=>{libs=>''});
+		$class->check_or_mk_global(libs=>'');
 		if (exists $config{load_libs}) {
 			my @list;
 			if (ref($config{load_libs}) eq "ARRAY") {
@@ -84,7 +85,7 @@
 			}
 			else {warn "load_libs not passed correct reference" }
 
-			push(@{$class->_conf->{libs}},@list);
+			push(@{$class->libs},@list);
 			delete $config{load_libs};
 		}
 
@@ -100,6 +101,7 @@
 
 		#load option data
 
+			#h: safety measure for carelessly defining options
 			#make global vars from option_value{vars}
 			my %varhash = map {$_,'undef' } (values %{$class->_alias_vars});
 			$class->check_or_mk_global(%varhash);
@@ -139,7 +141,7 @@
 	}
 	sub main_loop {
 		my $class = shift;
-		my ($letter,@args);
+		my ($cmd,@args);
 
 		#initialize shell
 		if (ref $_[0] eq "HASH") {
@@ -147,10 +149,11 @@
 		}
 
 		#start loop
-		($letter,@args) = $class->once(@_);
-		#while ($letter ne "q") {
-		while ($class->_alias_cmds->{$letter} ne "quit") {
-			($letter,@args) = $class->once;
+		($class,$cmd,@args) = $class->once(@_);
+		#while ($cmd ne "q") {
+		#while ($class->_alias_cmds->{$cmd} ne "quit") {
+		while ($cmd ne "quit") {
+			($class,$cmd,@args) = $class->once;
 		}
 	}
 	sub once {
@@ -163,6 +166,9 @@
 
 		#parse
 			@answer = $class->check_for_options(@answer);
+			#h: change current class	
+			$class = $class->change_class if ($class->_flag->{change_class});
+			#print "class: $class\n";
 			#parse hash table
 			my $currentparse = $class->_parse_mode;
 			my $method = $class->_alias_parse->{$currentparse};
@@ -172,7 +178,7 @@
 			elsif ($class->can($currentparse)) {($choice,@args) = $class->$currentparse(@answer)}
 
 		#execute choice
-			if (($alias{$choice} or '') eq "quit") { return $choice }
+			if (($alias{$choice} or $choice or '') eq "quit") { return ($class,'quit') }
 			elsif (exists $alias{$choice}) {
 				$class->${\$alias{$choice}}(@args);
 			} 
@@ -181,6 +187,7 @@
 
 		$class->end_loop;
 
+		$class->_flag->{change_class} = 0;
 		#h:reset _parse_mode and associated flag
 		$mcount++ if ($class->_parse_mode eq "m");
 		if ($mcount > 1 && $class->_parse_mode eq "m") {
@@ -188,7 +195,7 @@
 			$class->_flag->{menu}=0;
 			$mcount = 0;
 		}
-		return ($choice,@args);
+		return ($class,$choice,@args);
 	}
 #shell functions	
 	sub help_usage {
@@ -295,7 +302,7 @@
 	sub load_libs {
 		my $class =shift;		
 
-		for my $p (@{$class->_conf->{libs}}) {
+		for my $p (@{$class->libs}) {
 
 			die  "Fry::Lib is the root path and should not be specified in libs" if ($p
 				=~ /Fry::Lib/i);
@@ -323,6 +330,7 @@
 	sub load_lib {
 		my ($class,$module) = @_;
 
+		#load_module($class->base_class,$module);
 		$class->load_module($module);
 
 		$class->load_class_data($module) if ($module->can('_default_data'));
@@ -334,20 +342,21 @@
 		my ($class,$module) = @_;
 		no strict 'refs';
 
-		debug "loading lib $module\n";
+		debug "loading module $module\n";
 		my $oldmodule = __PACKAGE__;
-		eval "package $module; require $module; package $oldmodule";
+		eval "package $class; require $module; package $oldmodule";
+		#eval "require $module";
 		die $@ if $@;
 		push(@{$class."::ISA"},$module);
+		debug("$class\'s ISA is ". join(',',@{$class."::ISA"})."\n");
 	}	
 	sub load_class_data {
 		my ($class,$module) = @_;
-		debug "load $module\'s class data\n";
+		#debug "load $module\'s class data\n";
 
 		#class data
 		$class->check_or_mk_global(%{$module->_default_data->{global}});
 		$class->add_to_hash(help_data=>$module->_default_data->{help});
-		#$module->mk_many(%{$module->_default_data->{local}});
 
 		#aliases
 		#w: deref undef hash
@@ -362,32 +371,25 @@
 		my ($class,$module) =@_;
 		no strict 'refs';
 
-		#using YAML
-		$module =~ /::(\w+)$/;
-		if (-e $class->_conf->{conf_dir}.$1) {
-			$class->setmany(%{YAML::LoadFile($class->_conf->{conf_dir}.$1)});
-		}
+		my ($basename) = $module =~ /::(\w+)$/ || $module;
+		$class->read_file($class->_conf_dir.$basename);
 	}
-	sub read_conf {
-		my $class = shift;
-		#warn "config file ". $class->_conf_file. " doesn't exist", 
-		return unless ( -e $class->_conf_file); 
-		my %var;	
+	sub read_file {
+		my ($class,$file) = @_;
+		return unless ( -e $file); 
+		our $conf='';
 
 		eval {require YAML}; 
 		#require file
-		if ($@) {
-			warn "Global config file currently depends on YAML. To change
-			soon. $@\n";
-		}
-		else {
-			%var = %{YAML::LoadFile($class->_conf_file) || {}};
-			$class->mk_cdata_global(_conf=>\%var);
-		}
+		if ($@) { do $file ; }
+		else { $conf = YAML::LoadFile($file) || {}; }
+
+		$class->set_or_mk_global(%$conf);
 
 		if ($debug) {
 			require Data::Dumper;
-			print Data::Dumper::Dumper(\%var),"\n";
+			print "reading from file $file:\n";
+			print Data::Dumper::Dumper($conf),"\n";
 		}
 	}
 	sub parse_normal {
@@ -474,7 +476,7 @@
 	sub setoptions {
 		my ($class,$option_value) = @_;
 		my (%arg);
-		if ($debug) { print Data::Dumper::Dumper($option_value),"\n"};
+		if ($debug) { print "option values are:\n",Data::Dumper::Dumper($option_value),"\n"};
 
 		while (my ($k,$v) = each %$option_value){
 			my $key_count=0;
@@ -573,7 +575,7 @@ Fry::Shell - Create commandline application with plugin libraries.
 
 =head1 VERSION	
 
-This document describes version 0.08.
+This document describes version 0.09.
 
 =head1 DESCRIPTION 
 

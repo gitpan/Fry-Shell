@@ -19,14 +19,12 @@ Features
 	- should work with any database working under Class::DBI; verified to work with
 	  Mysql,Postgres and Sqlite.
 ToDo
-	- global config file: allow it to be a perl data structure and
-	support setting global data
 	- Redesign to allow plugin architecture for loading data, readline, storing
 	data, printing data. By making any external modules plugins, one can
 	have a minimal shell and install external modules as desired.
 	- support libraries which have object methods, currently only class methods supported  
 	- autocompletion support
-	- make design more OO
+	- make design more OO: suggestions welcome :) 
 	- better library plugin support
 License
 	Perl's

@@ -1,9 +1,10 @@
 #!/usr/bin/perl
 
-use Test::More 	tests=>15;
+use Test::More 	tests=>19;
 use strict;
 
 use base 'Fry::Shell';
+use lib 't/testlib';
 use Data::Dumper;
 
 my $prompt = "Once again?: ";
@@ -30,30 +31,33 @@ sub multiply {
 	ok(! $@, '&sh_init executes');
 
 	#default fns
-		can_ok(__PACKAGE__, @redefine_fns) && print "\tredefine functions defined\n";
+	can_ok(__PACKAGE__, @redefine_fns) && print "\tredefine functions defined\n";
 
-	#&load_class_data
-		#global data defined
-		can_ok(__PACKAGE__,@accessors) && print "\tmain accessors defined\n";
-		#&add_to_hash: help set
-		is(__PACKAGE__->help_data->{perl_exe}->{u},'$perl_code','&help_data set');
-		#td: one alias set
+	#global data defined
+	can_ok(__PACKAGE__,@accessors) && print "\tmain accessors defined\n";
 
-	#&read_conf:conf file set via yaml or require
-	
+	#&read_file:config file set via yaml or require
+	__PACKAGE__->read_file('t/testlib/config.yaml');
+	is(__PACKAGE__->some_data,'given','&read_file');
 
-	#td: load_libs defined
-		#&load_libs: dependent library loads first
+	#load_lib + &load_class_data
+		__PACKAGE__->load_lib('SampleLib');
+		#loads global
+		is(__PACKAGE__->food,'pizza','loads global');
+		#loads alias + &add_hash
+		is(__PACKAGE__->_alias_cmds->{f},'feed','load alias');
+		#loads help
+		is(__PACKAGE__->help_data->{feed}->{d},'virtually feeds user','loads help');
 		#&load_module: correct @ISA
-		#&read_lib_conf
+		ok(grep(/^SampleLib$/,@main::ISA) == 1 ,'library is inherited');
+		#&load_libs: dependent library loads first
 
-	#help defined from script
-	is(__PACKAGE__->help_data->{execute}->{d},'Does something','&help_data set');
-
-	#other parameters defined from script
+	#parameters defined from script
 	#ie bigbutt, alias_parse
 	is(__PACKAGE__->prompt,'Once again?: ','script parameter prompt set correctly');
 	is(__PACKAGE__->_alias_cmds->{'e'},"execute","aliasing works");
+	#help defined from script
+	is(__PACKAGE__->help_data->{execute}->{d},'Does something','&help_data set');
 
 
 	#setoptions
